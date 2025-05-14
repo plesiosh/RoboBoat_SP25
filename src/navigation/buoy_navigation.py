@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+
+import torch
+import cv2
+import numpy as np
+from collections import deque
+from ultralytics import YOLO
+
+class YoloBuoyNavigator(Node):
+    def __init__(self):
+        super().__init__('yolo_buoy_navigator')
+        # Load YOLO model
+        print("Loading YOLOv8n model...")
+        self.model = YOLO('/workspace/src/perception/src/buoy_detection.pt')  # or 'yolov8s.pt', etc.
+        self.model.to('cuda') # need jetson-compatible pytorch
+        print("... Done.")
+        
+        # ROS2 publisher
+        self.publisher = self.create_publisher(String, 'steering_command', 10)
+
+        # History of buoy positions
+        self.red_history = deque(maxlen=20)
+        self.green_history = deque(maxlen=20)
+
+        # Video source (replace with DepthAI if needed)
+        self.cap = cv2.VideoCapture(0)
+        self.timer = self.create_timer(0.1, self.process_frame)
+
+    def process_frame(self):
+        ret, frame = self.cap.read()
+        if not ret:
+            self.get_logger().warn("Failed to capture frame")
+            return
+
+        results = self.model(frame)
+        detections = results[0]
+
+        red_positions, green_positions = [], []
+
+        for box in detections.boxes:
+            x1, y1, x2, y2 = map(float, box.xyxy[0].tolist()) 
+            conf = float(box.conf[0])
+            label = float(box.cls[0])  
+
+            x_center = (x1 + x2) / 2
+            y_center = (y1 + y2) / 2
+            if label == 16: # red buoy
+                red_positions.append((x_center, y_center))
+            elif label == 11: # green buoy
+                green_positions.append((x_center, y_center))
+
+        self.update_history(self.red_history, red_positions)
+        self.update_history(self.green_history, green_positions)
+
+        self.predict_and_draw_path(frame, self.red_history, self.green_history)
+
+        steering = self.calculate_steering_command(frame, self.red_history, self.green_history)
+
+        msg = String()
+        msg.data = steering
+        self.publisher.publish(msg)
+
+        cv2.putText(frame, f"Steering: {steering}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 255), 2)
+        cv2.imshow("RoboBoat Navigation", frame)
+        cv2.waitKey(1)
+
+    def update_history(self, history, positions):
+        for pos in positions:
+            history.append(pos)
+
+    def predict_and_draw_path(self, frame, red_history, green_history):
+        if len(red_history) > 1 and len(green_history) > 1:
+            red_points = np.array([[int(x), int(y)] for x, y in red_history], np.int32)
+            green_points = np.array([[int(x), int(y)] for x, y in green_history], np.int32)
+
+            red_points = red_points[np.argsort(red_points[:, 1])]
+            green_points = green_points[np.argsort(green_points[:, 1])]
+
+            if len(red_points) > 1 and len(green_points) > 1:
+                path = np.vstack((red_points, green_points[::-1]))
+                overlay = frame.copy()
+                cv2.fillPoly(overlay, [path], (0, 255, 255), lineType=cv2.LINE_AA)
+                cv2.addWeighted(overlay, 0.3, frame, 0.7, 0, frame)
+
+    def calculate_steering_command(self, frame, red_history, green_history):
+        if red_history and green_history:
+            red = red_history[-1]
+            green = green_history[-1]
+
+            midpoint_x = (red[0] + green[0]) / 2
+            center_x = frame.shape[1] / 2
+
+            if midpoint_x < center_x - 10:
+                return "Left"
+            elif midpoint_x > center_x + 10:
+                return "Right"
+            else:
+                return "Straight"
+        return "No Command"
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = YoloBuoyNavigator()  # Replace with actual path
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
