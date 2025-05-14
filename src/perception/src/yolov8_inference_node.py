@@ -37,7 +37,7 @@ class YoloV8InferenceNode(Node):
 
         # Load default YOLOv8 model (nano variant)
         self.get_logger().info('Loading YOLOv8n model...')
-        self.model = YOLO('/workspace/oak_ws/src/yolov8_inference/yolov8_inference/buoy_detection.pt')  # or 'yolov8s.pt', etc.
+        self.model = YOLO('/workspace/src/perception/src/buoy_detection.pt')  # or 'yolov8s.pt', etc.
         self.model.to('cuda') # need jetson-compatible pytorch
 
     def image_callback(self, msg):

@@ -18,7 +18,7 @@ from cv_bridge import CvBridge
 from message_filters import Subscriber, ApproximateTimeSynchronizer
 from tf2_ros import TransformBroadcaster
 
-from ros2_camera_lidar_fusion.read_yaml import extract_configuration
+from src.read_yaml import extract_configuration
 from std_msgs.msg import Float32MultiArray
 from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import TransformStamped

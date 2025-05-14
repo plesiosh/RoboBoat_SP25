@@ -21,8 +21,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'lidar_camera_projection = perception.lidar_camera_projection:main',
-            'run_detection = perception.yolov8_inference_node:main'
+            'lidar_camera_projection = src.lidar_camera_projection:main',
+            'run_detection = src.yolov8_inference_node:main'
         ],
     },
 )
