@@ -25,10 +25,12 @@ docker build -t roboboat-fusion .
 
 - Modify the Livox configuration JSON files in the `config/MID360_config.json` directory as needed.
 
-### 3. Run the Docker Container
+### 3. Run the Docker Container & Install custom package
 
 ```bash
 sh run_docker.sh
+colcon build
+source install/setup.bash
 ```
 
 This script sets up and enters the development container.
