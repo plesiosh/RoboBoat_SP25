@@ -40,6 +40,7 @@ class YoloBuoyNavigator(Node):
         detections = results[0]
 
         red_positions, green_positions = [], []
+        self.displayFrame("rgb", frame, detections)
 
         for box in detections.boxes:
             x1, y1, x2, y2 = map(float, box.xyxy[0].tolist()) 
@@ -101,6 +102,22 @@ class YoloBuoyNavigator(Node):
             else:
                 return "Straight"
         return "No Command"
+
+    def displayFrame(self, name, frame, detections):
+        color = (255, 0, 0)
+
+        for box in detections.boxes:
+            conf = float(box.conf[0])
+            label = float(box.cls[0])  
+            label_tag = 'Red Buoy' if label == 16 else 'Green Buoy' if label == 11 else 'Unknown'
+
+            bbox = list(map(int, box.xyxy[0].tolist()))
+            cv2.putText(frame, label_tag, (bbox[0] + 10, bbox[1] + 20), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
+            cv2.putText(frame, f"{int(conf * 100)}%", (bbox[0] + 10, bbox[1] + 40), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
+            cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), color, 2)
+        # Show the frame
+        # cv2.imshow(name, frame)
+
 
 
 def main(args=None):
