@@ -16,54 +16,65 @@ import os
 import json
 from pathlib import Path
 import blobconverter
-
+from src.read_yaml import extract_configuration, load_extrinsic_matrix, load_camera_calibration
 
 class FusionNode(Node):
     def __init__(self):
-        self.R = np.array([[0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [1.0, 0.0, 0.0]])  # Rotation from lidar to camera
-        self.T = np.array([-0.05733964, 0.13018412, -0.12])  
+        super().__init__('fusion_node')
 
-        self.show_lidar_projections = True  # whether or not to draw lidar points on the output image
-        self.lidar_projections_size = 2  # radius of the lidar points on the image
-        self.use_ROS_camera_topic = False  # use ROS subscriber to get camera images
-        self.img_topic_name = '/oak/rgb/image_raw'  # the topic name of the image we want to subscribe to
-        self.show_fusion_result_opencv = False  # use cv2.imshow to show the fusion result
-        self.run_yolo_on_camera = False  # Only for OAK cameras, run the YOLO detection model on camera or not
-        self.record_video = True  # whether record a video or not
-        self.video_file_name = 'test.avi'  # name of the video being recorded
+        config_file = extract_configuration()
+        if config_file is None:
+            self.get_logger().error("Failed to extract configuration file.")
+            return
+        
+        config_folder = config_file['general']['config_folder']
+        extrinsic_yaml = config_file['general']['camera_extrinsic_calibration']
+        extrinsic_yaml = os.path.join(config_folder, extrinsic_yaml)
+        self.T_lidar_to_cam = load_extrinsic_matrix(extrinsic_yaml)
+        self.T_cam_to_lidar = np.linalg.inv(self.T_lidar_to_cam.T)
 
-        # Config YOLO detection model path ###################################################################################################################
-        if not self.run_yolo_on_camera:
-            yolo_model_path = '/workspace/src/perception/src/buoy_detection.pt'
+        camera_yaml = config_file['general']['camera_intrinsic_calibration']
+        camera_yaml = os.path.join(config_folder, camera_yaml)
+        self.K, self.dist_coeffs = load_camera_calibration(camera_yaml)
 
+        self.get_logger().info("Loaded extrinsic:\n{}".format(self.T_lidar_to_cam))
+        self.get_logger().info("Camera matrix:\n{}".format(self.K))
+        self.get_logger().info("Distortion coeffs:\n{}".format(self.dist_coeffs))
+
+        self.img_topic_name = config_file['camera']['image_topic']
+
+        self.show_lidar_projections = config_file['fusion']['show_lidar_projections']
+        self.lidar_projections_size = config_file['fusion']['lidar_projections_size']
+        self.use_oak_pipeline = config_file['fusion']['use_oak_pipeline']
+        self.show_fusion_result_opencv = config_file['fusion']['show_fusion_result_opencv']
+        self.yolo_on_cam = config_file['fusion']['yolo_on_cam']
+        self.record_video = config_file['fusion']['record_video']
+        self.video_file_name = config_file['fusion']['video_file_name']
+
+        if self.yolo_on_cam:
+            self.yolo_config = config_file['yolo']['dai_json_path']
+            self.yolo_model = config_file['yolo']['dai_blob_path']
+        else:
+            yolo_model_path = config_file['yolo']['cuda_path']
             self.yolo_model = YOLO(yolo_model_path)
             try:
                 self.yolo_model.to(device='cuda')
             except:
                 print('cuda not avaliable, use cpu')
                 self.yolo_model.to(device='cpu')
-        else:
-            self.yolo_config = os.path.join(get_package_share_directory("cam_lidar_fusion"), "blob_model/cow_v1_320.json")
-            self.yolo_model = os.path.join(get_package_share_directory("cam_lidar_fusion"), "blob_model/cow_v1_320_openvino_2022.1_6shave.blob")
-        # #####################################################################################################################################################
 
         # oak-d LR #################################################################
-        # self.K = np.array([[1147.15312, 0., 936.61046], [0., 1133.707, 601.71022], [0, 0, 1]])
-        self.K = np.array([[459.6620541342653, 0., 377.2551758479244], [0., 454.6877761110326, 245.7619461230642], [0, 0, 1]])
-        # self.img_size = [1200, 1920]
-        self.img_size = [480, 768]
-        if not self.use_ROS_camera_topic:
-            if not self.run_yolo_on_camera:
-                pipeline = self.get_oak_pipeline()
-                self.device = dai.Device(pipeline)
-            else:
-                self.K = np.array([
-                    [410.1213233877251, 0.0, 378.3684879770315],
-                    [0.0, 413.8855811891322, 241.1532014612676],
-                    [0.0, 0.0, 1.0]
-                ])                      
-                pipeline, self.img_size = self.get_oak_pipeline_with_nn()
-                self.device = dai.Device(pipeline)
+        self.img_size = [config_file['camera']['image_size']['height'], config_file['camera']['image_size']['width']]
+        if self.use_oak_pipeline:
+            pipeline = self.get_oak_pipeline_with_nn() if self.yolo_on_cam else self.get_oak_pipeline()
+            self.device = dai.Device(pipeline)
+        else:
+            self.oak_d_cam_subs = self.create_subscription(
+                Image,
+                self.img_topic_name,
+                self.cam_subs_callback,
+                qos_profile_sensor_data
+                )
         # ###############################################################################################################################################
         
         if self.record_video:
@@ -71,7 +82,6 @@ class FusionNode(Node):
             fourcc = cv2.VideoWriter_fourcc(*'XVID')
             self.recording_out = cv2.VideoWriter(self.video_file_name, fourcc, 20.0, (self.img_size[1],  self.img_size[0]))
 
-        super().__init__('fusion_node')
         self.lidar_subs_ = self.create_subscription(
             PointCloud2,
             '/livox/lidar',
@@ -80,13 +90,6 @@ class FusionNode(Node):
         )
         self.lidar_subs_  # prevent unused variable warning
         self.depth_matrix = np.array([])
-
-        self.oak_d_cam_subs = self.create_subscription(
-            Image,
-            self.img_topic_name,
-            self.cam_subs_callback,
-            qos_profile_sensor_data
-        )
         self.frame = None
     
         self.fusion_img_pubs_ = self.create_publisher(Image, 'camera/fused_img', 10)
@@ -104,26 +107,23 @@ class FusionNode(Node):
     def lidar_subs_callback(self, msg):
         # Get camera frame ########################################################################
         frame = None
-        if self.use_ROS_camera_topic:  # use ROS subscriber for oak cameras
+        if self.use_oak_pipeline:  
+            oak_q = self.device.getOutputQueue(name='rgb', maxSize=1, blocking=False)
+            in_q = oak_q.tryGet()
+            if self.yolo_on_cam:
+                q_nn = self.device.getOutputQueue(name='nn', maxSize=4, blocking=False)
+                in_nn = q_nn.get()
+            if in_q is not None:
+                frame = in_q.getCvFrame()
+                frame = cv2.resize(frame, (768, 480))
+                # print("got frame")
+        else: # use ROS subscriber for oak cameras
             if self.frame is not None:
                 frame = self.frame.copy()
-        else:
-            if self.camera_type == "WEBCAM":
-                ret, frame = self.cap.read()
-            else:  # using oak cameras
-                oak_q = self.device.getOutputQueue(name='rgb', maxSize=1, blocking=False)
-                in_q = oak_q.tryGet()
-                if self.run_yolo_on_camera:
-                    q_nn = self.device.getOutputQueue(name='nn', maxSize=4, blocking=False)
-                    in_nn = q_nn.get()
-                if in_q is not None:
-                    frame = in_q.getCvFrame()
-                    frame = cv2.resize(frame, (768, 480))
-                    # print("got frame")
 
         # Compute Depth Matrix #########################################################################
         lidar_points = np.array(list(read_points(msg, skip_nans=True))).T  # 4xn matrix, (x,y,z,i)
-        xs, ys, ps = lidar2pixel(lidar_points, self.R, self.T, self.K)
+        xs, ys, ps = lidar2pixel(lidar_points, self.T_lidar_to_cam, self.K)
 
         filtered_x, filtered_y, filtered_p = filter_points(xs, ys, ps, self.img_size)
 
@@ -135,7 +135,16 @@ class FusionNode(Node):
 
         # Visualization ####################################################################################
         if frame is not None:
-            if not self.run_yolo_on_camera:
+            if self.yolo_on_cam:
+                if in_nn is not None:
+                    detections = in_nn.detections
+                    for detection in detections:
+                        [x1,y1,x2,y2] = frameNorm(frame, (detection.xmin, detection.ymin, detection.xmax, detection.ymax))
+                        cv2.putText(frame, self.labels[detection.label], (x1 + 10, y1 + 20), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
+                        object_depth = np.min(self.depth_matrix[y1:y2, x1:x2])
+                        cv2.rectangle(frame, (x1, y1), (x2, y2), (0,0,255), 2)
+                        cv2.putText(frame, str(round(object_depth, 2)) + "m", (x1, y1-5), cv2.FONT_HERSHEY_COMPLEX, 1, 255)
+            else:
                 detections_xyxyn, classes = self.yolo_predict(frame)
                 for i, detection in enumerate(detections_xyxyn):
                     cls = None
@@ -155,15 +164,6 @@ class FusionNode(Node):
                         closest_green = min(closest_green, object_depth)
                     elif cls == 'Red':
                         closest_red = min(closest_red, object_depth)
-            else:
-                if in_nn is not None:
-                    detections = in_nn.detections
-                    for detection in detections:
-                        [x1,y1,x2,y2] = frameNorm(frame, (detection.xmin, detection.ymin, detection.xmax, detection.ymax))
-                        cv2.putText(frame, self.labels[detection.label], (x1 + 10, y1 + 20), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
-                        object_depth = np.min(self.depth_matrix[y1:y2, x1:x2])
-                        cv2.rectangle(frame, (x1, y1), (x2, y2), (0,0,255), 2)
-                        cv2.putText(frame, str(round(object_depth, 2)) + "m", (x1, y1-5), cv2.FONT_HERSHEY_COMPLEX, 1, 255)
             
             # Draw circles for the lidar points
             max_dist_thresh = 10  # the max distance used for color coding in visualization window.
@@ -193,10 +193,7 @@ class FusionNode(Node):
         cam_rgb = pipeline.create(dai.node.ColorCamera)
         # cam_rgb.setPreviewSize(1448, 568)
         cam_rgb.setBoardSocket(dai.CameraBoardSocket.CAM_A)
-        if self.camera_type == "OAK_LR":
-            cam_rgb.setResolution(dai.ColorCameraProperties.SensorResolution.THE_1200_P)
-        elif self.camera_type == "OAK_WIDE":
-            cam_rgb.setResolution(dai.ColorCameraProperties.SensorResolution.THE_720_P)
+        cam_rgb.setResolution(dai.ColorCameraProperties.SensorResolution.THE_720_P)
         cam_rgb.setInterleaved(False)
         xout_rgb = pipeline.create(dai.node.XLinkOut)
         xout_rgb.setStreamName("rgb")
@@ -258,10 +255,7 @@ class FusionNode(Node):
         # Properties
         camRgb.setPreviewSize(W, H)
         camRgb.setBoardSocket(dai.CameraBoardSocket.CAM_A)
-        if self.camera_type == "OAK_LR":
-            camRgb.setResolution(dai.ColorCameraProperties.SensorResolution.THE_1200_P)
-        elif self.camera_type == "OAK_WIDE":
-            camRgb.setResolution(dai.ColorCameraProperties.SensorResolution.THE_720_P)
+        camRgb.setResolution(dai.ColorCameraProperties.SensorResolution.THE_720_P)
         camRgb.setInterleaved(False)
         camRgb.setColorOrder(dai.ColorCameraProperties.ColorOrder.BGR)
         camRgb.setFps(40)
@@ -284,8 +278,12 @@ class FusionNode(Node):
         detectionNetwork.out.link(nnOut.input)
 
         print("Set pipeline for OAK camera with nn")
+        nnConfig_size = [H, W]
+        if self.img_size != nnConfig_size:
+            print(f"Image size {self.img_size} but using config with {nnConfig_size}")
+        self.img_size = nnConfig_size
 
-        return pipeline, (H, W)
+        return pipeline
     
     def yolo_predict(self, img):
         results = self.yolo_model.predict(source=img, save=False, save_txt=False)
@@ -302,7 +300,7 @@ class FusionNode(Node):
 
 
 # Helper functions #########################################################################################
-def lidar2pixel(lidar_points, R, T, K):
+def lidar2pixel(lidar_points, lidar2cam, K):
     # lidar_points assumed to be 4xn np array, each col should be (x, y, z, i)
     # R and T are (3, 3) and (3, )-like np arrays
     # K is (3, 3) camera calibration matrix
@@ -310,9 +308,6 @@ def lidar2pixel(lidar_points, R, T, K):
     # i = lidar_points[3, :]
     i = np.linalg.norm(xyz_lidar, axis=0)
     xyz_lidar = np.vstack((xyz_lidar, np.ones((len(i), ))))
-
-    lidar2cam = np.hstack((R, T.reshape((-1, 1))))
-    lidar2cam = np.vstack((lidar2cam, np.array([0, 0, 0, 1])))
 
     xyz_cam = lidar2cam @ xyz_lidar
     z_cam = xyz_cam[2, :]
