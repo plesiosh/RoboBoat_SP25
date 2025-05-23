@@ -101,7 +101,8 @@ class LidarCameraProjectionNode(Node):
         extrinsic_yaml = os.path.join(config_folder, extrinsic_yaml)
         self.T_lidar_to_cam = load_extrinsic_matrix(extrinsic_yaml)
         self.T_cam_to_lidar = np.linalg.inv(self.T_lidar_to_cam.T)
-
+        self.img_size = [config_file['camera']['image_size']['height'], config_file['camera']['image_size']['width']]
+        
         camera_yaml = config_file['general']['camera_intrinsic_calibration']
         camera_yaml = os.path.join(config_folder, camera_yaml)
         self.camera_matrix, self.dist_coeffs = load_camera_calibration(camera_yaml)
@@ -129,7 +130,6 @@ class LidarCameraProjectionNode(Node):
         projected_topic = config_file['camera']['projected_topic']
         self.pub_image = self.create_publisher(Image, projected_topic, 1)
         self.pub_centr = self.create_publisher(Float32MultiArray, '/livox/centroids', 1)
-        self.pub_markers = self.create_publisher(MarkerArray, '/livox/marker_array', 1)
         self.bridge = CvBridge()
 
         self.skip_rate = 1
@@ -142,24 +142,7 @@ class LidarCameraProjectionNode(Node):
             10
         )
         
-        self.class_names = [
-            'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
-            'train', 'truck', 'boat', 'traffic light', 'fire hydrant',
-            'green buoy', 'parking meter', 'bench', 'bird', 'cat', 'red buoy',
-            'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra', 'yellow buoy',
-            'backpack', 'umbrella', 'handbag', 'tie', 'suitcase', 'frisbee',
-            'skis', 'snowboard', 'sports ball', 'kite', 'baseball bat',
-            'baseball glove', 'skateboard', 'surfboard', 'tennis racket',
-            'bottle', 'wine glass', 'cup', 'fork', 'knife', 'spoon', 'bowl',
-            'banana', 'apple', 'sandwich', 'orange', 'broccoli', 'carrot',
-            'hot dog', 'pizza', 'donut', 'cake', 'chair', 'couch',
-            'potted plant', 'bed', 'dining table', 'toilet', 'tv', 'laptop',
-            'mouse', 'remote', 'keyboard', 'cell phone', 'microwave', 'oven',
-            'toaster', 'sink', 'refrigerator', 'book', 'clock', 'vase',
-            'scissors', 'teddy bear', 'hair drier', 'toothbrush'
-        ]
-        
-        self.buoy_idx = [11, 16, 23]
+        self.class_names = {11: "Green Buoy", 16: "Red Buoy", 23: "Yellow Buoy"}
 
     def bbox_callback(self, msg: Float32MultiArray):
         data = msg.data
@@ -172,27 +155,6 @@ class LidarCameraProjectionNode(Node):
         for i in range(0, len(data), 6):
             box = data[i:i+6]
             self.bounding_boxes.append(box)
-
-    def publish_static_tf(self):
-        tf_msg = TransformStamped()
-        tf_msg.header.stamp = self.get_clock().now().to_msg()
-        tf_msg.header.frame_id = "oak_rgb_camera_optical_frame"  # parent
-        tf_msg.child_frame_id = "livox_frame"                    # child
-
-        T = self.T_cam_to_lidar
-        translation = T[:3, 3]
-        rotation_matrix = T[:3, :3]
-        q = R.from_matrix(rotation_matrix).as_quat()
-
-        tf_msg.transform.translation.x = float(translation[0])
-        tf_msg.transform.translation.y = float(translation[1])
-        tf_msg.transform.translation.z = float(translation[2])
-        tf_msg.transform.rotation.x = float(q[0])
-        tf_msg.transform.rotation.y = float(q[1])
-        tf_msg.transform.rotation.z = float(q[2])
-        tf_msg.transform.rotation.w = float(q[3])
-
-        self.br_tf.sendTransform(tf_msg)
 
     def sync_callback(self, image_msg: Image, lidar_msg: PointCloud2):
         cv_image = self.bridge.imgmsg_to_cv2(image_msg, desired_encoding='bgr8')
@@ -213,11 +175,15 @@ class LidarCameraProjectionNode(Node):
         xyz_cam_h = xyz_lidar_h @ self.T_lidar_to_cam.T
         xyz_cam = xyz_cam_h[:, :3]
 
-        degree = 42
-        threshold = math.tan(degree/180*math.pi)
-        # mask_in_front = (xyz_cam[:, 2] > 0.0)
-        mask_in_front = ((xyz_cam[:, 2] > xyz_cam[:, 0]/threshold) & (xyz_cam[:, 2] > -xyz_cam[:, 0]/threshold))
+        depth_vals = np.linalg.norm(xyz_lidar, axis=1)
+
+        # degree = 45
+        # threshold = math.tan(degree/180*math.pi)
+        mask_in_front = (xyz_cam[:, 2] > 0.0)
+        # mask_in_front = ((xyz_cam[:, 2] > xyz_cam[:, 0]/threshold) & (xyz_cam[:, 2] > -xyz_cam[:, 0]/threshold))
         xyz_cam_front = xyz_cam[mask_in_front]
+        depth_front = depth_vals[mask_in_front]
+
         n_front = xyz_cam_front.shape[0]
         if n_front == 0:
             self.get_logger().info("No points in front of camera (z>0).")
@@ -234,7 +200,17 @@ class LidarCameraProjectionNode(Node):
             self.camera_matrix,
             self.dist_coeffs
         )
-        image_points = image_points.reshape(-1, 2)
+        image_points = image_points.reshape(-1, 2).astype(np.int64)
+        
+        lb = np.array([0, 0])
+        ub = np.array(self.img_size)
+        
+        xs, ys = image_points[:, 0], image_points[:, 1]
+        points = np.stack((ys, xs), axis=1)
+        
+        filtered_idx = np.all(np.logical_and(lb <= points, points < ub), axis=1)
+        filtered_points = image_points[filtered_idx]
+        filtered_depths = depth_front[filtered_idx]
 
         h, w = cv_image.shape[:2]
         z_vals = xyz_cam_front[:, 2]
@@ -243,48 +219,45 @@ class LidarCameraProjectionNode(Node):
         
         z_norm_uint8 = z_norm.astype(np.uint8)
         colors = cv2.applyColorMap(z_norm_uint8, cv2.COLORMAP_JET)
-
-        # Draw each point with its corresponding color
-        for (pt, color) in zip(image_points, colors):
+        filtered_colors = colors[filtered_idx]
+    
+        # for (pt, color) in zip(filtered_points, filtered_colors):
+        for (pt, color) in zip(filtered_points, filtered_colors):
             u, v = pt
-            u_int = int(u + 0.5)
-            v_int = int(v + 0.5)
-            if 0 <= u_int < w and 0 <= v_int < h:
-                b, g, r = color.flatten().tolist()
-                cv2.circle(cv_image, (u_int, v_int), 2, (b, g, r), -1)
+            u, v = int(u), int(v)
+            b, g, r = color.flatten().tolist()
+            cv2.circle(cv_image, (u, v), 2, (b, g, r), -1)        
+
+        ys, xs = filtered_points[:, 1], filtered_points[:, 0]
+        coords = np.stack((ys, xs))
+        
+        abs_coords = np.ravel_multi_index(coords, self.img_size)
+        depth_lookup = np.bincount(abs_coords, weights=filtered_depths, minlength=self.img_size[0]*self.img_size[1])
+        depth_lookup = depth_lookup.reshape(self.img_size)
+        depth_lookup[depth_lookup == 0.0] = np.inf
 
         centroid_array = Float32MultiArray()
         centroid_data = []
         closest_red = 40.0
         closest_green = 40.0
-    
-        marker_array = MarkerArray()
-        marker_id = 0
 
         # Draw bounding boxes with average depth label
         for box in self.bounding_boxes:
             x1, y1, x2, y2, conf, cls = map(int, box[:6])
-            if cls not in self.buoy_idx:
+            if cls not in self.class_names.keys():
                 continue
             
             x1, y1, x2, y2 = max(x1, 0), max(y1, 0), min(x2, w-1), min(y2, h-1)
-            
-            # Mask image_points inside box
-            mask = (image_points[:, 0] >= x1) & (image_points[:, 0] <= x2) & \
-                (image_points[:, 1] >= y1) & (image_points[:, 1] <= y2)
-            depth_vals = xyz_cam_front[mask, 2]  # Z values
-            print(depth_vals)
 
             if len(depth_vals) > 0:
-                centroid = np.mean(xyz_cam_front[mask], axis=0)
-                class_id = int(cls)
-                class_name = self.class_names[class_id] if class_id < len(self.class_names) else f"cls_{class_id}"
-                label = f"{class_name} ({centroid[2]:.2f}) m"
+                object_depth = np.min(depth_lookup[y1:y2, x1:x2])
+                class_name = self.class_names[cls]
+                label = f"{class_name} ({object_depth:.2f}) m"
                 
-                if class_id == 11:  # Green buoy
-                    closest_green = min(closest_green, centroid[2])
-                elif class_id == 16:  # Red buoy
-                    closest_red = min(closest_red, centroid[2])
+                if class_name == 'Green Buoy':
+                    closest_green = min(closest_green, object_depth)
+                elif class_name == 'Red Buoy':
+                    closest_red = min(closest_red, object_depth)
                     
             else:
                 label = "N/A"
@@ -304,45 +277,8 @@ class LidarCameraProjectionNode(Node):
             cv2.putText(cv_image, label, text_origin,
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
 
-            points_in_box = xyz_cam_front[mask]
-            centroid = np.mean(points_in_box, axis=0)
-            size = np.std(points_in_box, axis=0) * 2.5  # Estimate box size
-
-            marker = Marker()
-            marker.header = image_msg.header
-            marker.ns = "buoy_boxes"
-            marker.id = marker_id
-            marker_id += 1
-            marker.type = Marker.CUBE
-            marker.action = Marker.ADD
-            marker.pose.position.x = centroid[0]
-            marker.pose.position.y = centroid[1]
-            marker.pose.position.z = centroid[2]
-            marker.pose.orientation.w = 1.0
-            marker.scale.x = max(size[0], 0.05)
-            marker.scale.y = max(size[1], 0.05)
-            marker.scale.z = max(size[2], 0.05)
-
-            if cls == 11:  # Green buoy
-                marker.color.r = 0.0
-                marker.color.g = 1.0
-                marker.color.b = 0.0
-            elif cls == 16:  # Red buoy
-                marker.color.r = 1.0
-                marker.color.g = 0.0
-                marker.color.b = 0.0
-            else:
-                marker.color.r = 1.0
-                marker.color.g = 1.0
-                marker.color.b = 1.0
-
-            marker.color.a = 0.3
-            marker.lifetime = rclpy.duration.Duration(seconds=0.1).to_msg()
-
-            marker_array.markers.append(marker)
-
+            
         # Take only the closest buoy for each color        
-
         out_msg = self.bridge.cv2_to_imgmsg(cv_image, encoding='bgr8')
         out_msg.header = image_msg.header
         self.pub_image.publish(out_msg)
@@ -350,8 +286,6 @@ class LidarCameraProjectionNode(Node):
         centroid_data.extend([closest_red, closest_green])
         centroid_array.data = centroid_data
         self.pub_centr.publish(centroid_array)
-        self.publish_static_tf()
-        self.pub_markers.publish(marker_array)
 
 
 def main(args=None):
