@@ -9,6 +9,7 @@ import numpy as np
 import cv2
 import depthai as dai
 from ultralytics import YOLO
+from std_msgs.msg import Float32MultiArray
 
 from ament_index_python import get_package_share_directory
 import os
@@ -19,25 +20,21 @@ import blobconverter
 
 class FusionNode(Node):
     def __init__(self):
-        self.R = np.array([[0, -1, 0], [0, 0, -1], [1, 0, 0]])  # Rotation from lidar to camera
-        # self.T = np.array([0, 0.2, 0])  # lidar frame position seen from the camera's frame
-        self.T = np.array([-0.02, 0.13, -0.015])  # oak lr test
+        self.R = np.array([[0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [1.0, 0.0, 0.0]])  # Rotation from lidar to camera
+        self.T = np.array([-0.05733964, 0.13018412, -0.12])  
 
-        self.camera_type = "OAK_LR"  # WEBCAM, OAK_LR, ROS
         self.show_lidar_projections = True  # whether or not to draw lidar points on the output image
         self.lidar_projections_size = 2  # radius of the lidar points on the image
         self.use_ROS_camera_topic = False  # use ROS subscriber to get camera images
         self.img_topic_name = '/oak/rgb/image_raw'  # the topic name of the image we want to subscribe to
         self.show_fusion_result_opencv = False  # use cv2.imshow to show the fusion result
-        self.run_yolo_on_camera = True  # Only for OAK cameras, run the YOLO detection model on camera or not
+        self.run_yolo_on_camera = False  # Only for OAK cameras, run the YOLO detection model on camera or not
         self.record_video = True  # whether record a video or not
         self.video_file_name = 'test.avi'  # name of the video being recorded
 
         # Config YOLO detection model path ###################################################################################################################
         if not self.run_yolo_on_camera:
-            # yolo_model_path = os.path.join(get_package_share_directory("cam_lidar_fusion"), "model/obstacle_v2_320.pt")
-            yolo_model_path = os.path.join(get_package_share_directory("cam_lidar_fusion"), "model/shelf_picker_v4_320.pt")
-            # yolo_model_path = os.path.join(get_package_share_directory("cam_lidar_fusion"), "model/cones_best.pt")
+            yolo_model_path = '/workspace/src/perception/src/buoy_detection.pt'
 
             self.yolo_model = YOLO(yolo_model_path)
             try:
@@ -46,41 +43,27 @@ class FusionNode(Node):
                 print('cuda not avaliable, use cpu')
                 self.yolo_model.to(device='cpu')
         else:
-            # self.yolo_config = os.path.join(get_package_share_directory("cam_lidar_fusion"), "blob_model/shelf_picker_v3_320.json")
-            # self.yolo_model = os.path.join(get_package_share_directory("cam_lidar_fusion"), "blob_model/shelf_picker_v3_320_openvino_2022.1_6shave.blob")
-            # self.yolo_config = os.path.join(get_package_share_directory("cam_lidar_fusion"), "blob_model/obstacle_v2_320.json")
-            # self.yolo_model = os.path.join(get_package_share_directory("cam_lidar_fusion"), "blob_model/obstacle_v2_320_openvino_2022.1_6shave.blob")
             self.yolo_config = os.path.join(get_package_share_directory("cam_lidar_fusion"), "blob_model/cow_v1_320.json")
             self.yolo_model = os.path.join(get_package_share_directory("cam_lidar_fusion"), "blob_model/cow_v1_320_openvino_2022.1_6shave.blob")
         # #####################################################################################################################################################
 
-        # Config camera type, camera intrinsic matrix, size of the image (row, col) ###########################################################################
-        if self.camera_type == "WEBCAM":
-            # webcam ####################################################################
-            self.K = np.array([[543.892, 0, 308.268], [0, 537.865, 214.227], [0, 0, 1]])  # K matrix from camera_calibration
-            self.img_size = (480, 640)  # Size of the img captured by the camera
-            self.cap = cv2.VideoCapture(0)
-            if not self.cap.isOpened():
-                print("Cannot open webcam")
-                exit()
-        elif self.camera_type == "OAK_LR":
-            # oak-d LR #################################################################
-            self.K = np.array([[1147.15312, 0., 936.61046], [0., 1133.707, 601.71022], [0, 0, 1]])
-            self.img_size = [1200, 1920]
-            if not self.use_ROS_camera_topic:
-                if not self.run_yolo_on_camera:
-                    pipeline = self.get_oak_pipeline()
-                    self.device = dai.Device(pipeline)
-                else:
-                    self.K = np.array([[357.60759842, 0., 161.29415866], [0., 356.51492723, 154.07382818], [0., 0., 1.]])
-                    pipeline, self.img_size = self.get_oak_pipeline_with_nn()
-                    self.device = dai.Device(pipeline)
-        elif self.camera_type == "ROS":
-            self.K = np.array([[543.892, 0, 308.268], [0, 537.865, 214.227], [0, 0, 1]])
-            self.img_size = [480, 640]
-        else:
-            print("camera type not supported")
-            exit()
+        # oak-d LR #################################################################
+        # self.K = np.array([[1147.15312, 0., 936.61046], [0., 1133.707, 601.71022], [0, 0, 1]])
+        self.K = np.array([[459.6620541342653, 0., 377.2551758479244], [0., 454.6877761110326, 245.7619461230642], [0, 0, 1]])
+        # self.img_size = [1200, 1920]
+        self.img_size = [480, 768]
+        if not self.use_ROS_camera_topic:
+            if not self.run_yolo_on_camera:
+                pipeline = self.get_oak_pipeline()
+                self.device = dai.Device(pipeline)
+            else:
+                self.K = np.array([
+                    [410.1213233877251, 0.0, 378.3684879770315],
+                    [0.0, 413.8855811891322, 241.1532014612676],
+                    [0.0, 0.0, 1.0]
+                ])                      
+                pipeline, self.img_size = self.get_oak_pipeline_with_nn()
+                self.device = dai.Device(pipeline)
         # ###############################################################################################################################################
         
         if self.record_video:
@@ -91,7 +74,7 @@ class FusionNode(Node):
         super().__init__('fusion_node')
         self.lidar_subs_ = self.create_subscription(
             PointCloud2,
-            '/cloud_unstructured_fullframe',
+            '/livox/lidar',
             self.lidar_subs_callback,
             qos_profile_sensor_data
         )
@@ -105,11 +88,9 @@ class FusionNode(Node):
             qos_profile_sensor_data
         )
         self.frame = None
-        
-        self.cone_hsv_lb = np.array([109, 83, 131])  # hsv threshold lower bound for detecting cones
-        self.cone_hsv_ub = np.array([180, 255, 255])  # hsv threshold upper bound for detecting cones
-
+    
         self.fusion_img_pubs_ = self.create_publisher(Image, 'camera/fused_img', 10)
+        self.closest_rgbouys_pubs = self.create_publisher(Float32MultiArray, 'camera/closest_buoys', 10)
         self.bridge = CvBridge()
         
     def cam_subs_callback(self, msg):
@@ -137,6 +118,7 @@ class FusionNode(Node):
                     in_nn = q_nn.get()
                 if in_q is not None:
                     frame = in_q.getCvFrame()
+                    frame = cv2.resize(frame, (768, 480))
                     # print("got frame")
 
         # Compute Depth Matrix #########################################################################
@@ -146,12 +128,22 @@ class FusionNode(Node):
         filtered_x, filtered_y, filtered_p = filter_points(xs, ys, ps, self.img_size)
 
         self.depth_matrix = points_to_img(filtered_x, filtered_y, filtered_p, self.img_size)
+        centroid_array = Float32MultiArray()
+        centroid_data = []        
+        closest_red = 40.0
+        closest_green = 40.0
 
         # Visualization ####################################################################################
         if frame is not None:
             if not self.run_yolo_on_camera:
-                detections_xyxyn = self.yolo_predict(frame)
-                for detection in detections_xyxyn:
+                detections_xyxyn, classes = self.yolo_predict(frame)
+                for i, detection in enumerate(detections_xyxyn):
+                    cls = None
+                    if classes[i] == 16:
+                        cls = 'Red'
+                    elif classes[i] == 11:
+                        cls = 'Green'
+                    
                     x1 = int(detection[0] * self.img_size[1])
                     y1 = int(detection[1] * self.img_size[0])
                     x2 = int(detection[2] * self.img_size[1])
@@ -159,6 +151,10 @@ class FusionNode(Node):
                     object_depth = np.min(self.depth_matrix[y1:y2, x1:x2])
                     cv2.rectangle(frame, (x1,y1), (x2,y2), (0,0,255), 3)
                     cv2.putText(frame, str(round(object_depth, 2)) + "m", (x1, y1-5), cv2.FONT_HERSHEY_COMPLEX, 1, 255)
+                    if cls == 'Green':
+                        closest_green = min(closest_green, object_depth)
+                    elif cls == 'Red':
+                        closest_red = min(closest_red, object_depth)
             else:
                 if in_nn is not None:
                     detections = in_nn.detections
@@ -169,23 +165,6 @@ class FusionNode(Node):
                         cv2.rectangle(frame, (x1, y1), (x2, y2), (0,0,255), 2)
                         cv2.putText(frame, str(round(object_depth, 2)) + "m", (x1, y1-5), cv2.FONT_HERSHEY_COMPLEX, 1, 255)
             
-            # OpenCV detection ###############################################################################################
-            # cone_detection_boxes = detect_cones(frame, self.cone_hsv_lb, self.cone_hsv_ub)
-            # frame_cv_copy = frame.copy()
-            # # Draw box for detected cones
-            # # Print the lidar distance of the cone above the box
-            # for box in cone_detection_boxes:
-            #     x = box[0]
-            #     y = box[1]
-            #     w = box[2]
-            #     h = box[3]
-            #     cone_dist = np.min(self.depth_matrix[y:y+h, x:x+w])
-            #     # print('cone dist: ', cone_dist)
-            #     cv2.putText(frame_cv_copy, str(round(cone_dist, 2)) + "m", (x, y-5), cv2.FONT_HERSHEY_COMPLEX, 1, 255)
-            #     cv2.rectangle(frame_cv_copy, (x, y), (x+w, y+h), (1, 255, 1), 3)
-            # # cv2.imshow('OpenCV threshold detection: ', frame_cv_copy)
-            # ################################################################################################################
-
             # Draw circles for the lidar points
             max_dist_thresh = 10  # the max distance used for color coding in visualization window.
             if self.show_lidar_projections:
@@ -203,7 +182,12 @@ class FusionNode(Node):
 
             img_msg = self.bridge.cv2_to_imgmsg(frame, "bgr8")
             self.fusion_img_pubs_.publish(img_msg)
-    
+            # get red & green closest bouys
+            centroid_data.extend([closest_red, closest_green])
+            centroid_array.data = centroid_data
+            self.closest_rgbouys_pubs.publish(centroid_array)   
+
+
     def get_oak_pipeline(self):
         pipeline = dai.Pipeline()
         cam_rgb = pipeline.create(dai.node.ColorCamera)
@@ -308,11 +292,13 @@ class FusionNode(Node):
 
         # bounding box params https://docs.ultralytics.com/modes/predict/#boxes
         box = results[0].boxes.cpu()
+
         xyxyn = box.xyxyn.numpy().reshape((-1,))
         detections_xyxyn = list(zip(*[iter(xyxyn)] * 4))
+        classes = box.cls.numpy().reshape((-1,))
         # confidence = box.conf.numpy()
 
-        return detections_xyxyn
+        return detections_xyxyn, classes
 
 
 # Helper functions #########################################################################################
@@ -373,98 +359,6 @@ def points_to_img(xs, ys, ps, size):
     img = img.reshape(size)
     img[img == 0.0] = np.inf
     return img
-
-def convex_hull_pointing_up(ch):
-
-    points_above_center, points_below_center = [], []
-    
-    x, y, w, h = cv2.boundingRect(ch)
-    aspect_ratio = w / h
-
-    if aspect_ratio < 0.8:
-        vertical_center = y + h / 2
-
-        for point in ch:
-            if point[0][1] < vertical_center:
-                points_above_center.append(point)
-            elif point[0][1] >= vertical_center:
-                points_below_center.append(point)
-
-        left_x = points_below_center[0][0][0]
-        right_x = points_below_center[0][0][0]
-        for point in points_below_center:
-            if point[0][0] < left_x:
-                left_x = point[0][0]
-            if point[0][0] > right_x:
-                right_x = point[0][0]
-
-        for point in points_above_center:
-            if (point[0][0] < left_x) or (point[0][0] > right_x):
-                return False
-    else:
-        return False
-        
-    return True
-
-def detect_cones(frame, hsv_lb, hsv_ub):
-    frame_hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-
-    img_thresh = cv2.inRange(frame_hsv, hsv_lb, hsv_ub)
-    # cv2.imshow('threshold', img_thresh)
-
-    kernel = np.ones((5, 5))
-    img_thresh_opened = cv2.morphologyEx(img_thresh, cv2.MORPH_OPEN, kernel)
-    # cv2.imshow('thresh opened', img_thresh_opened)
-
-    img_thresh_blurred = cv2.medianBlur(img_thresh_opened, 5)
-
-    img_edges = cv2.Canny(img_thresh_blurred, 80, 160)
-
-    contours, _ = cv2.findContours(np.array(img_edges), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    # img_contours = np.zeros_like(img_edges)
-    # cv2.drawContours(img_contours, contours, -1, (255,255,255), 2)
-    # cv2.imshow('contours', img_contours)
-
-    approx_contours = []
-    for c in contours:
-        approx = cv2.approxPolyDP(c, 10, closed = True)
-        approx_contours.append(approx)
-    # img_approx_contours = np.zeros_like(img_edges)
-    # cv2.drawContours(img_approx_contours, approx_contours, -1, (255,255,255), 1)
-
-    all_convex_hulls = []
-    for ac in approx_contours:
-        all_convex_hulls.append(cv2.convexHull(ac))
-    # img_all_convex_hulls = np.zeros_like(img_edges)
-    # cv2.drawContours(img_all_convex_hulls, all_convex_hulls, -1, (255,255,255), 2)
-
-    convex_hulls_3to10 = []
-    for ch in all_convex_hulls:
-        if 3 <= len(ch) <= 10:
-            convex_hulls_3to10.append(cv2.convexHull(ch))
-    # img_convex_hulls_3to10 = np.zeros_like(img_edges)
-    # cv2.drawContours(img_convex_hulls_3to10, convex_hulls_3to10, -1, (255,255,255), 2)
-
-    cones = []
-    bounding_rects = []
-    for ch in convex_hulls_3to10:
-        if convex_hull_pointing_up(ch):
-            cones.append(ch)
-            rect = cv2.boundingRect(ch)
-            bounding_rects.append(rect)
-    # img_cones = np.zeros_like(img_edges)
-    # cv2.drawContours(img_cones, cones, -1, (255,255,255), 2)
-    # cv2.drawContours(img_cones, bounding_rects, -1, (1,255,1), 2)
-    # cv2.imshow('find cones', img_cones)
-
-    # img_res = frame
-    # cv2.drawContours(img_res, cones, -1, (255,255,255), 2)
-
-    # for rect in bounding_rects:
-    #     cv2.rectangle(img_res, (rect[0], rect[1]), (rect[0]+rect[2], rect[1]+rect[3]), (1, 255, 1), 3)
-    # cv2.imshow('cone detection result', img_res)
-
-    return bounding_rects
 
 def frameNorm(frame, bbox):
     normVals = np.full(len(bbox), frame.shape[0])
