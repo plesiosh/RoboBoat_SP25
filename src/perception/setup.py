@@ -22,7 +22,9 @@ setup(
     entry_points={
         'console_scripts': [
             'lidar_camera_projection = src.lidar_camera_projection:main',
-            'run_detection = src.yolov8_inference_node:main'
+            'run_detection = src.yolov8_inference_node:main',
+            'sick_fusion = src.fusion_node:main',
+            'dai_node = src.dai_node:main',
         ],
     },
 )
