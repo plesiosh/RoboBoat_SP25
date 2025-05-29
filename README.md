@@ -45,11 +45,11 @@ sh scripts/launch_motors.sh
 - For debugging purposes, do not run `scripts/launch_motors.sh`
 - Example `launch_script.sh` are:
    
-| Command              | Published Topics                                                                 | Fusion             | Navigation         | Description                                                                                     |
-|----------------------|----------------------------------------------------------------------------------|--------------------|--------------------|-------------------------------------------------------------------------------------------------|
-| `launch_base.sh`     | `/annotated_image`                                                               |                    | `buoy_navigation.py` | Pipeline.                                                                                       |
-| `launch_old.sh`      | `/oak/rgb/projected`<br>`/centroids`                                             | ✅                 | `fuse_navigation.py` | Initial Prototype. Uses ROS2 Image for processing frames.                                       |
-| `launch_combined.sh` | `/camera/fused_img`<br>`/centroids`                                              | ✅                 | `fuse_navigation.py` | Pipeline based on sick-lidar. Camera/YOLO/Fusion runs in single node.                          |
-| `launch_modular.sh`  | `/dai_node/annotated_image`<br>`/oak/rgb/projected`<br>`/centroids`              | ✅                 | `fuse_navigation.py` | Pipeline with DepthAI-inference node. Camera/YOLO and Fusion node are separated.               |
+| Command              | Published Topics                                                                 | Fusion             |Description                                                                                     |
+|----------------------|----------------------------------------------------------------------------------|--------------------|-------------------------------------------------------------------------------------------------|
+| `launch_base.sh`     | `/annotated_image`                                                               |                    |  Pipeline based on previous system (RoboBoat 2024) with .pt instead of blob file. |
+| `launch_old.sh`      | `/oak/rgb/projected`<br>`/centroids`                                             | ✅                 |  Initial Prototype. Uses ROS2 Image for processing frames.                                       |
+| `launch_combined.sh` | `/camera/fused_img`<br>`/centroids`                                              | ✅                 |  Pipeline based on sick-lidar. Camera/YOLO/Fusion runs in single node.                          |
+| `launch_modular.sh`  | `/dai_node/annotated_image`<br>`/oak/rgb/projected`<br>`/centroids`              | ✅                 |  Pipeline with DepthAI-inference node. Camera/YOLO and Fusion node are separated.               |
 
 - Note. If `fusion.visualize` is set to False in `config/general_configuration.yaml`, visualization topics such as `/oak/rgb/projected` or `camera/fused_img` may not be published.
