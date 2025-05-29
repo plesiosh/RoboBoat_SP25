@@ -3,12 +3,14 @@
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
+from sensor_msgs.msg import Image
 
 import torch
 import cv2
 import numpy as np
 from collections import deque
 from ultralytics import YOLO
+from cv_bridge import CvBridge
 
 class YoloBuoyNavigator(Node):
     def __init__(self):
@@ -21,6 +23,8 @@ class YoloBuoyNavigator(Node):
         
         # ROS2 publisher
         self.publisher = self.create_publisher(String, 'steering_command', 10)
+        self.image_pub = self.create_publisher(Image, 'annotated_image', 10)
+        self.bridge = CvBridge()
 
         # History of buoy positions
         self.red_history = deque(maxlen=20)
@@ -66,8 +70,12 @@ class YoloBuoyNavigator(Node):
         self.publisher.publish(msg)
 
         cv2.putText(frame, f"Steering: {steering}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 255), 2)
-        cv2.imshow("RoboBoat Navigation", frame)
-        cv2.waitKey(1)
+        # cv2.imshow("RoboBoat Navigation", frame)
+        # cv2.waitKey(1)
+        
+        # Publish annotated image
+        ros_img = self.bridge.cv2_to_imgmsg(frame, encoding='bgr8')
+        self.image_pub.publish(ros_img)
 
     def update_history(self, history, positions):
         for pos in positions:
@@ -95,9 +103,9 @@ class YoloBuoyNavigator(Node):
             midpoint_x = (red[0] + green[0]) / 2
             center_x = frame.shape[1] / 2
 
-            if midpoint_x < center_x - 10:
+            if midpoint_x < center_x - 80:
                 return "Left"
-            elif midpoint_x > center_x + 10:
+            elif midpoint_x > center_x + 80:
                 return "Right"
             else:
                 return "Straight"
