@@ -1,6 +1,8 @@
 # Start from Ubuntu
 FROM humble-gpu-ubuntu22.04:latest
 
+RUN sudo apt-get install ros-humble-foxglove-bridge
+
 RUN mkdir /livox_ws && \
     cd /livox_ws && \
     git clone https://github.com/Livox-SDK/Livox-SDK2.git && \
