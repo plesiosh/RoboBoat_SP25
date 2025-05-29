@@ -1,6 +1,7 @@
 docker run \
     --runtime nvidia \
-    --name test \
+    --name container_name \
+    -e TZ=America/Los_Angeles \
     -it \
     --privileged \
     --net=host \
@@ -16,4 +17,4 @@ docker run \
     --volume='/home/jetson/.Xauthority:/root/.Xauthority:rw' \
     --volume='/tmp/.X11-unix/:/tmp/.X11-unix' \
     --volume='./:/workspace' \
-    roboboat-fusion:latest 
+    roboboat-final:latest 
