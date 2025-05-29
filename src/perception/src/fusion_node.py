@@ -93,7 +93,7 @@ class FusionNode(Node):
         self.frame = None
     
         self.fusion_img_pubs_ = self.create_publisher(Image, 'camera/fused_img', 10)
-        self.closest_rgbouys_pubs = self.create_publisher(Float32MultiArray, 'camera/closest_buoys', 10)
+        self.closest_rgbouys_pubs = self.create_publisher(Float32MultiArray, '/centroids', 10)
         self.bridge = CvBridge()
         
     def cam_subs_callback(self, msg):
@@ -132,6 +132,10 @@ class FusionNode(Node):
         centroid_data = []        
         closest_red = 40.0
         closest_green = 40.0
+        xydepth = Float32MultiArray()
+        xydepth = []        
+        closest_red_xydepth = [-1.0, -1.0, -1.0]
+        closest_green_xydepth = [-1.0, -1.0, -1.0]
 
         # Visualization ####################################################################################
         if frame is not None:
@@ -162,8 +166,16 @@ class FusionNode(Node):
                     cv2.putText(frame, str(round(object_depth, 2)) + "m", (x1, y1-5), cv2.FONT_HERSHEY_COMPLEX, 1, 255)
                     if cls == 'Green':
                         closest_green = min(closest_green, object_depth)
+                        if closest_green_xydepth[2] < 0 or closest_green_xydepth[2] > object_depth:
+                            closest_green_xydepth = [(x1 + x2) / 2.0, (y1 + y2) / 2.0, object_depth]
                     elif cls == 'Red':
                         closest_red = min(closest_red, object_depth)
+                        if closest_red_xydepth[2] < 0 or closest_green_xydepth[2] > object_depth:
+                            closest_red_xydepth = [(x1 + x2) / 2.0, (y1 + y2) / 2.0, object_depth]
+                            
+                    # Return all detections
+                    # xydepth.extend(p=[(x1 + x2) / 2.0, (y1 + y2) / 2.0, object_depth, cls])
+                    
             
             # Draw circles for the lidar points
             max_dist_thresh = 10  # the max distance used for color coding in visualization window.
@@ -184,7 +196,17 @@ class FusionNode(Node):
             self.fusion_img_pubs_.publish(img_msg)
             # get red & green closest bouys
             centroid_data.extend([closest_red, closest_green])
-            centroid_array.data = centroid_data
+            # centroid_array.data = centroid_data
+
+            # x, y, depth for closest bouys
+            # print(closest_red_xydepth)
+            # print(closest_green_xydepth)
+            xydepth.extend(closest_red_xydepth)
+            xydepth.extend(closest_green_xydepth)
+            centroid_array.data = xydepth
+
+
+            
             self.closest_rgbouys_pubs.publish(centroid_array)   
 
 

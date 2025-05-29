@@ -240,6 +240,11 @@ class LidarCameraProjectionNode(Node):
         centroid_data = []
         closest_red = 40.0
         closest_green = 40.0
+        xydepth = Float32MultiArray()
+        xydepth = []        
+        closest_red_xydepth = [-1.0, -1.0, -1.0]
+        closest_green_xydepth = [-1.0, -1.0, -1.0]
+
 
         # Draw bounding boxes with average depth label
         for box in self.bounding_boxes:
@@ -256,8 +261,15 @@ class LidarCameraProjectionNode(Node):
                 
                 if class_name == 'Green Buoy':
                     closest_green = min(closest_green, object_depth)
+                    if closest_green_xydepth[2] < 0 or closest_green_xydepth[2] > object_depth:
+                        closest_green_xydepth = [(x1 + x2) / 2.0, (y1 + y2) / 2.0, object_depth]
                 elif class_name == 'Red Buoy':
                     closest_red = min(closest_red, object_depth)
+                    if closest_red_xydepth[2] < 0 or closest_green_xydepth[2] > object_depth:
+                        closest_red_xydepth = [(x1 + x2) / 2.0, (y1 + y2) / 2.0, object_depth]
+               
+                # Return all detections
+                # xydepth.extend(p=[(x1 + x2) / 2.0, (y1 + y2) / 2.0, object_depth, cls])     
                     
             else:
                 label = "N/A"
@@ -284,7 +296,11 @@ class LidarCameraProjectionNode(Node):
         self.pub_image.publish(out_msg)
         
         centroid_data.extend([closest_red, closest_green])
-        centroid_array.data = centroid_data
+        # centroid_array.data = centroid_data
+        xydepth.extend(closest_red_xydepth)
+        xydepth.extend(closest_green_xydepth)
+        centroid_array.data = xydepth
+
         self.pub_centr.publish(centroid_array)
 
 
