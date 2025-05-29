@@ -87,7 +87,7 @@ class auto_nav(Node):
         self.navigation_input.publish(self.msg)
 
     def turn_right(self):
-        dir_to_move = "s"  # right
+        dir_to_move = "d"  # right
         self.msg.data=dir_to_move
         self.navigation_input.publish(self.msg)
 
@@ -97,7 +97,7 @@ class auto_nav(Node):
         self.navigation_input.publish(self.msg)
 
     def stop(self):
-        dir_to_move = "d"
+        dir_to_move = "s"
         self.msg.data=dir_to_move
         self.navigation_input.publish(self.msg)
 

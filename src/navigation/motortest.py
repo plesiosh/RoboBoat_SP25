@@ -50,17 +50,24 @@ class NavigationServer(Node):
         self.get_logger().info(f"Received command: {command}")
 
         if command == self.move_forward_cmd:
-            self.thrusters.set_thrusters(-0.6, -0.6, 0.6, -0.6)
+            self.thrusters.set_thrusters(-0.3, -0.3, 0.3, -0.3)
         elif command == self.move_backward_cmd:
-            self.thrusters.set_thrusters(0.6, 0.6, -0.6, 0.6)
+            self.thrusters.set_thrusters(0.3, 0.3, -0.3, 0.3)
         elif command == self.turn_left_cmd:
-            self.thrusters.set_thrusters(0.5, -0.5, -0.5, -0.5)
+            self.thrusters.set_thrusters(0.25, -0.25, -0.25, -0.25)
         elif command == self.turn_right_cmd:
-            self.thrusters.set_thrusters(-0.5, 0.5, 0.5, 0.5)
+            self.thrusters.set_thrusters(-0.25, 0.25, 0.25, 0.25)
         elif command == self.stop_cmd:
             self.thrusters.set_thrusters(0.0, 0.0, 0.0, 0.0)
         else:
             self.get_logger().warn(f"Unknown command: {command}")
+
+        # Motors stop after 100ms of any command 
+        # time.sleep(0.1)
+        # self.thrusters.set_thrusters(0.0, 0.0, 0.0, 0.0)
+
+        # timer = threading.Timer(0.1, self.thrusters.set_thrusters(0.0, 0.0, 0.0, 0.0))
+        # timer.start()
 
 def main(args=None):
     rclpy.init(args=args)
