@@ -27,3 +27,21 @@ general:
   keyboard_listener: True
   get_intrinsics: True
   get_extrinsics: True
+
+yolo:
+  cuda_path: /workspace/src/perception/YOLOv8_model/buoy_detection.pt
+  dai_blob_path: /workspace/src/perception/YOLOv8_model/best-next_openvino_2022.1_6shave.blob
+  dai_json_path: /workspace/src/perception/YOLOv8_model/best-next.json
+
+fusion:
+  show_lidar_projections: True  # whether or not to draw lidar points on the output image
+  lidar_projections_size: 2  # radius of the lidar points on the image
+  use_oak_pipeline: True  # use ROS subscriber to get camera images
+  show_fusion_result_opencv: False  # use cv2.imshow to show the fusion result
+  yolo_on_cam: False
+  record_video: True  # whether record a video or not
+  video_file_name: test.avi  # name of the video being recorded
+  visualize: False  # whether to visualize the fusion result
+
+navigation:
+  visualize: False
