@@ -91,7 +91,7 @@ class YoloBuoyNavigator(Node):
         msg.data = steering
         self.publisher.publish(msg)
 
-        cv2.putText(frame, f"Steering: {steering}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 255), 2)
+        cv2.putText(frame, f"Steering: {steering}", (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 0, 255), 2)
         # cv2.imshow("RoboBoat Navigation", frame)
         # cv2.waitKey(1)
         
