@@ -11,13 +11,23 @@ import numpy as np
 from collections import deque
 from ultralytics import YOLO
 from cv_bridge import CvBridge
+import depthai as dai
+from src.read_yaml import extract_configuration
 
 class YoloBuoyNavigator(Node):
     def __init__(self):
         super().__init__('yolo_buoy_navigator')
         # Load YOLO model
+
+        config_file = extract_configuration()
+        if config_file is None:
+            self.get_logger().error("Failed to extract configuration file.")
+            return
+        model_path = config_file['yolo']['cuda_path']
+
+        self.setup_depthai_pipeline()
         print("Loading YOLOv8n model...")
-        self.model = YOLO('/workspace/src/perception/src/buoy_detection.pt')  # or 'yolov8s.pt', etc.
+        self.model = YOLO(model_path)
         self.model.to('cuda') # need jetson-compatible pytorch
         print("... Done.")
         
@@ -31,16 +41,28 @@ class YoloBuoyNavigator(Node):
         self.green_history = deque(maxlen=20)
 
         # Video source (replace with DepthAI if needed)
-        self.cap = cv2.VideoCapture(0)
-        self.timer = self.create_timer(0.1, self.process_frame)
+        self.timer = self.create_timer(0.03, self.process_frame)
+
+    def setup_depthai_pipeline(self):
+        pipeline = dai.Pipeline()
+
+        cam_rgb = pipeline.createColorCamera()
+        cam_rgb.setBoardSocket(dai.CameraBoardSocket.CAM_A)
+        cam_rgb.setResolution(dai.ColorCameraProperties.SensorResolution.THE_1080_P)
+        cam_rgb.setInterleaved(False)
+        cam_rgb.setFps(30)
+
+        xout = pipeline.create(dai.node.XLinkOut)
+        xout.setStreamName("video")
+        cam_rgb.video.link(xout.input)
+
+        self.device = dai.Device(pipeline)
+        self.video_queue = self.device.getOutputQueue(name="video", maxSize=1, blocking=False)
 
     def process_frame(self):
-        ret, frame = self.cap.read()
-        if not ret:
-            self.get_logger().warn("Failed to capture frame")
-            return
-
-        results = self.model(frame)
+        in_frame = self.video_queue.get()
+        frame = in_frame.getCvFrame()
+        results = self.model.predict(frame, verbose=False, device="cuda")
         detections = results[0]
 
         red_positions, green_positions = [], []
