@@ -38,7 +38,7 @@ source install/setup.bash
 ### 4. Launch the Navigation
 
 ```bash
-sh scripts/<launch_script.sh>
+sh scripts/<script>
 sh scripts/launch_motors.sh
 ```
 
