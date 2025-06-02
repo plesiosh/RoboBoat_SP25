@@ -15,7 +15,7 @@ The RoboBoat: Sensor Fusion project aims to show that distance detection using L
 - [Project Specification](https://docs.google.com/document/d/1jGWx0obzSInUuRZ6uEnp4cMySWTh9c6y9-f4LXS7z-w/edit?usp=drive_link)
 - [Milestone Report](https://docs.google.com/document/d/1YAR-kWi-IRRTvuDzCWWdU_S_Y7P9bI7nazszzl0PzKQ/edit?usp=drive_link)
 - [Oral Presentation Update](https://docs.google.com/presentation/d/1o0DdRfBu8TBziqyvM1yBafP77axB9wX4pufC6WJgTPc/edit?usp=drive_link)
-- [Final Report]([link-to-wiki](https://docs.google.com/document/d/11gG9BDBjtqJwpGLsE-MwbweyBIV_n6-hv33ZnTEHZz0/edit?usp=drive_link))
+- [Final Report](https://docs.google.com/document/d/11gG9BDBjtqJwpGLsE-MwbweyBIV_n6-hv33ZnTEHZz0/edit?usp=drive_link)
 - [Final Presentation](https://docs.google.com/presentation/d/1JMB3IwH4d70OUTG5mmVQHdnbJaqyONg-uKeOTJpM7yE/edit?usp=drive_link)
 - [Final Video]()
 
