@@ -54,9 +54,9 @@ class NavigationServer(Node):
         elif command == self.move_backward_cmd:
             self.thrusters.set_thrusters(0.3, 0.3, -0.3, 0.3)
         elif command == self.turn_left_cmd:
-            self.thrusters.set_thrusters(0.25, -0.25, -0.25, -0.25)
+            self.thrusters.set_thrusters(-0.15, -0.15, -0.15, -0.15)
         elif command == self.turn_right_cmd:
-            self.thrusters.set_thrusters(-0.25, 0.25, 0.25, 0.25)
+            self.thrusters.set_thrusters(-0.15, -0.15, 0.15, 0.15)
         elif command == self.stop_cmd:
             self.thrusters.set_thrusters(0.0, 0.0, 0.0, 0.0)
         else:
