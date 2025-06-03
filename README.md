@@ -55,6 +55,45 @@ sh scripts/launch_motors.sh
 - Note. If `fusion.visualize` is set to False in `config/general_configuration.yaml`, visualization topics such as `/oak/rgb/projected` or `camera/fused_img` may not be published.
 
 
+## Project Structure
+
+```python   
+├── Dockerfile # start docker container from Dockerfile
+├── README.md
+├── config
+│   ├── # LiDAR, camera, YOLOv8, and general configuration
+├── foxglove.sh # launch a foxglove session with foxglove bridge
+├── index.html # HTML for our GitHub Page
+├── run_docker.sh # run the docker container with all required arguments
+├── scripts
+│   ├── # launch different combinations of ROS nodes in tmux windows
+├── src
+│   ├── localization 
+│   │   ├── # localization scripts and configuration
+│   ├── navigation
+│   │   ├── # motor commands and algorithms for navigating through buoys
+│   ├── perception
+│   │   ├── YOLOv8_model
+│   │   │   ├── # YOLOv8 .pt, .blob, .xml, .bin, .json files
+│   │   └── src
+│   │       ├── # ROS2 nodes for camera, LiDAR, and sensor fusion
+│   └── sensors
+│       ├── gps
+│       │   ├── # low level GPS functionality
+│       └── launch
+│           ├── # low level LiDAR functionality
+└── static
+    ├── css
+    │   ├── # CSS for our GitHub Page 
+    ├── images
+    │   ├── # images for our GitHub Page
+    ├── js
+    │   ├── # javascript for our GitHub Page
+    └── videos
+        ├── # videos for our GitHub Page
+```
+
+
 ## Model Training
 
 Note: Follow these instructions on the device you want to train the model on.
