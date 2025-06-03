@@ -65,6 +65,7 @@ class DaiNode(Node):
         while self.video_queue.has():
             in_video = self.video_queue.get()
         frame = in_video.getCvFrame()
+        frame = cv2.resize(frame, (self.img_size[1], self.img_size[0]))
 
         latency_ms = (dai.Clock.now() - in_video.getTimestamp()).total_seconds() * 1000
         
