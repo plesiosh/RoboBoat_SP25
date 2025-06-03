@@ -20,9 +20,19 @@
   <link rel="icon" type="image/x-icon" href="static/images/roboboat.png">
   <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro" rel="stylesheet">
   <link rel="stylesheet" href="static/css/bulma.min.css">
+  <link rel="stylesheet" href="static/css/bulma-carousel.min.css">
+  <link rel="stylesheet" href="static/css/bulma-slider.min.css">
+  <link rel="stylesheet" href="static/css/fontawesome.all.min.css">
+  <link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
   <link rel="stylesheet" href="static/css/index.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script src="https://documentcloud.adobe.com/view-sdk/main.js"></script>
+  <script defer src="static/js/fontawesome.all.min.js"></script>
+  <script src="static/js/bulma-carousel.min.js"></script>
+  <script src="static/js/bulma-slider.min.js"></script>
+  <script src="static/js/index.js"></script>
 </head>
 <body>
   <section class="hero">
@@ -30,7 +40,7 @@
       <div class="container is-max-desktop">
         <div class="columns is-centered">
           <div class="column has-text-centered">
-            <h1 class="title is-1 publication-title">RoboBoat: Sensor Fusion</h1>
+            <h1 class="title is-1 publication-title">RoboBoat: Camera-LiDAR Fusion for Autonomous Boat Navigation</h1>
             <div class="mt-5">
 
               
@@ -76,6 +86,12 @@
                   <a href="https://drive.google.com/file/d/1_V3031uUX2kvH4p0tqeYHx7yq8Av30m8/view?usp=sharing" target="_blank" class="external-link button is-normal is-rounded is-dark">
                     <span class="icon"><i class="fas fa-file-alt"></i></span>
                     <span>Milestone Report</span>
+                  </a>
+                </span>
+                <span class="link-block">
+                  <a href="https://drive.google.com/file/d/1ZfJ7l0SUV1CRM6_TR0e_ErT96YCKo4WS/view?usp=sharing" target="_blank" class="external-link button is-normal is-rounded is-dark">
+                    <span class="icon"><i class="fas fa-file-alt"></i></span>
+                    <span>Oral Presentation</span>
                   </a>
                 </span>
                 <span class="link-block">
@@ -135,16 +151,47 @@
     <div class="container is-max-desktop">
       <div class="columns is-centered has-text-centered">
         <div class="column is-four-fifths">
+          <br>
+          <br>
           <h2 class="title is-3">Abstract</h2>
           <div class="content has-text-justified">
             <p>
-              The RoboBoat: Sensor Fusion project aims to show that distance detection using LiDAR, on top of accurate object classification, is necessary to enhance an autonomous surface vehicle’s ability to navigate dynamic water environments by accounting for the dimension of depth in path planning. The annual RoboBoat competition challenges autonomous surface vehicles to navigate a dynamic aquatic environment using computer vision, path planning, and obstacle avoidance. To meet these demands, our vehicle, Team Inspiration’s RoboBoat, is equipped with a long-range camera as well as a LiDAR sensor. The project demonstrates the fusion of RGB camera data with LiDAR depth data and a path planning algorithm taking advantage of the new depth information. The main result was that the boat followed the path outlined by the buoys much more accurately, avoiding veering off course entirely.
+              This project aims to demonstrate that distance detection using LiDAR, on top of accurate object classification, is necessary to enhance an autonomous surface vehicle’s ability to navigate dynamic water environments by accounting for the dimension of depth in path planning. The annual RoboBoat competition challenges autonomous surface vehicles to navigate a dynamic aquatic environment using computer vision, path planning, and obstacle avoidance. To meet these demands, our vehicle, Team Inspiration’s RoboBoat, is equipped with a long-range camera as well as a LiDAR sensor. The project demonstrates the fusion of RGB camera data with LiDAR depth data and a path planning algorithm taking advantage of the new depth information. The main result was that the boat followed the path outlined by the buoys much more accurately, avoiding veering off course entirely.
             </p>
+            <br>
+            <br>
           </div>
         </div>
       </div>
     </div>
   </section>
+
+  <section class="hero is-small">
+    <div class="hero-body">
+      <div class="container">
+        <br>
+        <h2 class="title is-3">Hardware Components</h2>
+        <div id="results-carousel" class="carousel results-carousel">
+        <div class="item">
+          <!-- Your image here -->
+          <img src="static/images/Hardware_Boat.png" alt="MY ALT TEXT"/>
+          <h2 class="subtitle has-text-centered">
+            <br>
+            Overview of the boat's design. The system includes an OAK-D LR camera, a Livox Mid-360 LiDAR, and T200 thrusters.
+          </h2>
+        </div>
+        <div class="item">
+          <!-- Your image here -->
+          <img src="static/images/Hardware_ElectricalBox.png" alt="MY ALT TEXT"/>
+          <h2 class="subtitle has-text-centered">
+            Electrical box (Left: Top View, Right: Side View). The Jetson Xavier NX serves as the onboard computer, while an Arduino receives thruster commands and relays them to the T200 units.
+          </h2>
+        </div>
+    </div>
+  </div>
+  </div>
+  </section>
+  <!-- End image carousel -->
 
   <section class="hero is-small">
     <div class="hero-body">
