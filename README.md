@@ -1,7 +1,19 @@
-# RoboBoat SP25
+# RoboBoat SP25: Camera-LiDAR Fusion for Autonomous Boat Navigation
+This project aims to successfully complete the "Follow the Path" task in the RoboBoat Competition using sensor fusion (Camera–LiDAR Fusion). The task involves autonomously navigating a path bordered by red and green buoys while avoiding collisions.
+
+[[Project Page](https://plesiosh.github.io/RoboBoat_SP25/)] 
+[[Code Structure](#project-structure)]
+[[Setup](#setup)]
+[[YOLO Setup](#model-training)]
 
 
-## Setup Instructions
+---
+# Setup 
+### System Requirements
+- Ubuntu 20.05
+- Jetson Nano Xavier NX
+- ROS2 Humble
+
 
 ### 1. Clone the Repository
 
@@ -10,7 +22,7 @@ git clone https://github.com/plesiosh/RoboBoat_SP25.git
 cd RoboBoat_SP25
 ````
 
-### ~~2. Build the Docker Image (Skip this for now)~~
+### 2. Build the Docker Image
 
 ```bash
 docker build -t roboboat-fusion .
@@ -55,7 +67,7 @@ sh scripts/launch_motors.sh
 - Note. If `fusion.visualize` is set to False in `config/general_configuration.yaml`, visualization topics such as `/oak/rgb/projected` or `camera/fused_img` may not be published.
 
 
-## Project Structure
+# Project Structure
 
 ```python   
 ├── Dockerfile # start docker container from Dockerfile
@@ -94,7 +106,7 @@ sh scripts/launch_motors.sh
 ```
 
 
-## Model Training
+# Model Training
 
 Note: Follow these instructions on the device you want to train the model on.
 
