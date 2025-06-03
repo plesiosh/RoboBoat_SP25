@@ -63,7 +63,8 @@ Note: Our model is available in this repository in two formats:
 - PyTorch (`.pt`): `src/perception/YOLOv8_model/buoy_detection.pt`
 - DepthAI Blob (`.blob`): `src/perception/YOLOv8_model/buoy_detection.blob`
   - `buoy_detection.json` is necessary to run the blob on the camera (stored in the same directory)
-Follow the rest of the instructions if you want to retrain the model.
+
+**Follow the rest of the instructions if you want to retrain the model.**
 
 ### 1. Clone the MHSeals buoy-model repository
 
