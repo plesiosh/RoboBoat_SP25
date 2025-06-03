@@ -6,7 +6,7 @@ The RoboBoat: Sensor Fusion project aims to show that distance detection using L
 ![image](boat.png)
 
 ## Repository Link
-**GitHub Repository**: https://github.com/plesiosh/RoboBoat_SP25
+**GitHub Repository**: [https://github.com/plesiosh/RoboBoat_SP25](https://github.com/plesiosh/RoboBoat_SP25)
 
 ## Documentation
 - [Setup Instructions and Code Documentation](https://github.com/plesiosh/RoboBoat_SP25/blob/main/README.md)
