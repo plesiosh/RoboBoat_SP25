@@ -1,7 +1,19 @@
-# RoboBoat SP25
+# RoboBoat SP25: Camera-LiDAR Fusion for Autonomous Boat Navigation
+This project aims to successfully complete the "Follow the Path" task in the RoboBoat Competition using sensor fusion (Camera–LiDAR Fusion). The task involves autonomously navigating a path bordered by red and green buoys while avoiding collisions.
+
+[[Project Page](https://plesiosh.github.io/RoboBoat_SP25/)] 
+[[Code Structure](#project-structure)]
+[[Setup](#setup)]
+[[YOLO Setup](#model-training)]
 
 
-## Setup Instructions
+---
+# Setup 
+### System Requirements
+- Ubuntu 20.05
+- Jetson Nano Xavier NX
+- ROS2 Humble
+
 
 ### 1. Clone the Repository
 
@@ -10,7 +22,7 @@ git clone https://github.com/plesiosh/RoboBoat_SP25.git
 cd RoboBoat_SP25
 ````
 
-### ~~2. Build the Docker Image (Skip this for now)~~
+### 2. Build the Docker Image
 
 ```bash
 docker build -t roboboat-fusion .
@@ -55,7 +67,46 @@ sh scripts/launch_motors.sh
 - Note. If `fusion.visualize` is set to False in `config/general_configuration.yaml`, visualization topics such as `/oak/rgb/projected` or `camera/fused_img` may not be published.
 
 
-## Model Training
+# Project Structure
+
+```python   
+├── Dockerfile # start docker container from Dockerfile
+├── README.md
+├── config
+│   ├── # LiDAR, camera, YOLOv8, and general configuration
+├── foxglove.sh # launch a foxglove session with foxglove bridge
+├── index.html # HTML for our GitHub Page
+├── run_docker.sh # run the docker container with all required arguments
+├── scripts
+│   ├── # launch different combinations of ROS nodes in tmux windows
+├── src
+│   ├── localization 
+│   │   ├── # localization scripts and configuration
+│   ├── navigation
+│   │   ├── # motor commands and algorithms for navigating through buoys
+│   ├── perception
+│   │   ├── YOLOv8_model
+│   │   │   ├── # YOLOv8 .pt, .blob, .xml, .bin, .json files
+│   │   └── src
+│   │       ├── # ROS2 nodes for camera, LiDAR, and sensor fusion
+│   └── sensors
+│       ├── gps
+│       │   ├── # low level GPS functionality
+│       └── launch
+│           ├── # low level LiDAR functionality
+└── static
+    ├── css
+    │   ├── # CSS for our GitHub Page 
+    ├── images
+    │   ├── # images for our GitHub Page
+    ├── js
+    │   ├── # javascript for our GitHub Page
+    └── videos
+        ├── # videos for our GitHub Page
+```
+
+
+# Model Training
 
 Note: Follow these instructions on the device you want to train the model on.
 
