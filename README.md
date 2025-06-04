@@ -4,7 +4,7 @@ This project aims to successfully complete the "Follow the Path" task in the Rob
 [[Project Page](https://plesiosh.github.io/RoboBoat_SP25/)] 
 [[Code Structure](#project-structure)]
 [[Setup](#setup)]
-[[YOLO Setup](#model-training)]
+[[YOLO Setup](#buoy-model-setup-and-training)]
 
 
 ---
@@ -106,16 +106,16 @@ sh scripts/launch_motors.sh
 ```
 
 
-# Model Training
+# Buoy Model Setup and Training
 
-Note: Follow these instructions on the device you want to train the model on.
-
-Note: Our model is available in this repository in two formats:
+Our buoy detection model is available in this repository in two formats:
 - PyTorch (`.pt`): `src/perception/YOLOv8_model/buoy_detection.pt`
+  - Our implementation: `src/perception/src/dai_node.py`
 - DepthAI Blob (`.blob`): `src/perception/YOLOv8_model/buoy_detection.blob`
+  - Our implementation: `src/perception/src/dai_blob_node.py`
   - `buoy_detection.json` is necessary to run the blob on the camera (stored in the same directory)
 
-**Follow the rest of the instructions if you want to retrain the model.**
+========== **Follow the rest of the instructions if you want to _retrain_ the model.** ==========
 
 ### 1. Clone the MHSeals buoy-model repository
 
