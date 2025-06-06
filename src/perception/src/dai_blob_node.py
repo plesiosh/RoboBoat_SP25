@@ -75,6 +75,9 @@ class DaiNode(Node):
         xout_video = self.pipeline.createXLinkOut()
         xout_video.setStreamName("video")
         nn.passthrough.link(xout_video.input)
+        xout_nn = self.pipeline.createXLinkOut()
+        xout_nn.setStreamName("detections")
+        nn.out.link(xout_nn.input)
 
         self.device = dai.Device(self.pipeline)
         self.video_queue = self.device.getOutputQueue(name="video", maxSize=1, blocking=True)
