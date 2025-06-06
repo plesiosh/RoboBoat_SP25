@@ -23,6 +23,7 @@ from std_msgs.msg import Float32MultiArray
 from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import TransformStamped
 from scipy.spatial.transform import Rotation as R
+from vision_msgs.msg import Detection2D, Detection2DArray, BoundingBox3D, BoundingBox3DArray, Detection3D, Detection3DArray
 
 def pointcloud2_to_xyz_array_fast(cloud_msg: PointCloud2, skip_rate: int = 1) -> np.ndarray:
     if cloud_msg.height == 0 or cloud_msg.width == 0:
@@ -97,14 +98,14 @@ class LidarCameraProjectionNode(Node):
             )
             self.ts.registerCallback(self.sync_callback)
             self.create_subscription(
-                Float32MultiArray,
+                Detection2DArray,
                 '/oak/rgb/bounding_boxes',
                 self.bbox_callback,
                 10
             )
         else:
             self.get_logger().info(f"Subscribing to bounding box topic: /oak/rgb/bounding_boxes")
-            self.boundingbox_sub = Subscriber(self, Float32MultiArray, '/oak/rgb/bounding_boxes')
+            self.boundingbox_sub = Subscriber(self, Detection2DArray, '/oak/rgb/bounding_boxes')
             self.ts = ApproximateTimeSynchronizer(
                 [self.boundingbox_sub, self.lidar_sub],
                 queue_size=10,
@@ -125,16 +126,19 @@ class LidarCameraProjectionNode(Node):
         
         self.class_names = {11: "Green Buoy", 16: "Red Buoy", 23: "Yellow Buoy"}
 
-    def bbox_callback(self, msg: Float32MultiArray):
-        data = msg.data
-        if len(data) % 6 != 0:
-            self.get_logger().warn("Received malformed bounding box data.")
-            self.bounding_boxes = []
-            return
-
+    def bbox_callback(self, msg: Detection2DArray):
         self.bounding_boxes = []
-        for i in range(0, len(data), 6):
-            box = data[i:i+6]
+        for det in msg.detections:
+            # x1, y1, x2, y2, conf, cls
+            x1 = det.bbox.center.position.x - det.bbox.size_x / 2
+            x2 = det.bbox.center.position.x + det.bbox.size_x / 2
+            y1 = det.bbox.center.position.y - det.bbox.size_y / 2
+            y2 = det.bbox.center.position.y + det.bbox.size_y / 2
+
+            conf = det.results[0].hypothesis.score
+            cls = int(det.results[0].hypothesis.class_id)
+
+            box = [x1, y1, x2, y2, conf, cls]
             self.bounding_boxes.append(box)
 
     def sync_callback(self, image_msg: Image, lidar_msg: PointCloud2):
@@ -283,7 +287,7 @@ class LidarCameraProjectionNode(Node):
         self.pub_centr.publish(centroid_array)
 
 
-    def sync_callback_noVis(self, boundingbox_msg: Float32MultiArray, lidar_msg: PointCloud2):
+    def sync_callback_noVis(self, boundingbox_msg: Detection2DArray, lidar_msg: PointCloud2):
         # self.get_logger().info("in noVis")
         # cv_image = self.bridge.imgmsg_to_cv2(image_msg, desired_encoding='bgr8')
         bounding_b = ()
@@ -360,25 +364,14 @@ class LidarCameraProjectionNode(Node):
         closest_red_xydepth = [-1.0, -1.0, -1.0]
         closest_green_xydepth = [-1.0, -1.0, -1.0]
 
-        data = boundingbox_msg.data
-        if len(data) % 6 != 0:
-            self.get_logger().warn("Received malformed bounding box data.")
-            # self.bounding_boxes = []
-            return
-
-        self.bounding_boxes = []
-        for i in range(0, len(data), 6):
-            box = data[i:i+6]
-            self.bounding_boxes.append(box)
-
-        # box = data[:6]
-        # self.get_logger().info("printing data")
-        # print(data)
-        # Draw bounding boxes with average depth label
-        for box in self.bounding_boxes:
+        for det in boundingbox_msg.detections:
+            x1 = int(det.bbox.center.position.x - det.bbox.size_x / 2)
+            x2 = int(det.bbox.center.position.x + det.bbox.size_x / 2)
+            y1 = int(det.bbox.center.position.y - det.bbox.size_y / 2)
+            y2 = int(det.bbox.center.position.y + det.bbox.size_y / 2)
+            conf = det.results[0].hypothesis.score
+            cls = int(det.results[0].hypothesis.class_id)
             
-        # x1, y1, x2, y2, conf, cls = map(int, box[:6])
-            x1, y1, x2, y2, conf, cls = map(int, box[:6])
             if cls not in self.class_names.keys():
                 return# continue
             

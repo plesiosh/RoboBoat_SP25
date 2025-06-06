@@ -10,6 +10,7 @@ import depthai as dai
 from ultralytics import YOLO
 from std_msgs.msg import Float32MultiArray
 from src.read_yaml import extract_configuration
+from vision_msgs.msg import Detection2D, Detection2DArray, ObjectHypothesis, ObjectHypothesisWithPose, BoundingBox2D, Point2D, Pose2D
 
 class DaiNode(Node):
     def __init__(self):
@@ -34,7 +35,7 @@ class DaiNode(Node):
 
 
         self.bbox_publisher = self.create_publisher(
-            Float32MultiArray,
+            Detection2DArray,
             '/oak/rgb/bounding_boxes',
             10
         )
@@ -85,18 +86,36 @@ class DaiNode(Node):
         filtered_indices = [i for i, cls in enumerate(results.boxes.cls.tolist()) if int(cls) in target_classes]
         results.boxes = results.boxes[filtered_indices]
 
-        bbox_array = Float32MultiArray()
-        bbox_data = []
+        detection_array = Detection2DArray()
+        detection_array.header.stamp = self.get_clock().now().to_msg()
             
         for box in results.boxes:
             x1, y1, x2, y2 = map(float, box.xyxy[0].tolist()) 
             conf = float(box.conf[0])
-            class_id = float(box.cls[0])  
-            bbox_data.extend([x1, y1, x2, y2, conf, class_id])
+            class_id = int(box.cls[0])  
 
-        bbox_array.data = bbox_data
+            center_x = (x1 + x2) / 2.0
+            center_y = (y1 + y2) / 2.0
+            width = x2 - x1
+            height = y2 - y1
+
+            bbox = BoundingBox2D()
+            bbox.center = Pose2D(position=Point2D(x=center_x, y=center_y), theta=0.0)
+            bbox.size_x = width
+            bbox.size_y = height
+
+            hypothesis = ObjectHypothesis()
+            hypothesis.class_id = str(class_id)
+            hypothesis.score = conf
+
+            detection = Detection2D()
+            detection.header = detection_array.header
+            detection.bbox = bbox
+            detection.results.append(ObjectHypothesisWithPose(hypothesis=hypothesis))
+            detection_array.detections.append(detection)
+
         # Publish bounding boxes
-        self.bbox_publisher.publish(bbox_array)
+        self.bbox_publisher.publish(detection_array)
 
         # Annotate and publish
         annotated_frame = results.plot()

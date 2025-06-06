@@ -11,6 +11,7 @@ from ultralytics import YOLO
 from std_msgs.msg import Float32MultiArray
 from src.read_yaml import extract_configuration
 import json
+from vision_msgs.msg import Detection2D, Detection2DArray, ObjectHypothesis, ObjectHypothesisWithPose, BoundingBox2D, Point2D, Pose2D
 
 class DaiNode(Node):
     def __init__(self):
@@ -41,7 +42,7 @@ class DaiNode(Node):
 
 
         self.bbox_publisher = self.create_publisher(
-            Float32MultiArray,
+            Detection2DArray,
             '/oak/rgb/bounding_boxes',
             10
         )
@@ -106,30 +107,48 @@ class DaiNode(Node):
         allowed_names = ['red_buoy', 'green_buoy', 'yellow_buoy', 'black_buoy']
         # target_classes = [i for i, name in self.model.names.items() if name in allowed_names]
 
-        bbox_array = Float32MultiArray()
-        bbox_data = []
-
+        detection_array = Detection2DArray()
+        detection_array.header.stamp = self.get_clock().now().to_msg()
+        
         for det in detections:
             label = self.labels[det.label] if det.label < len(self.labels) else f"Class_{det.label}"
             if label not in allowed_names:
                 continue
-
-            x1 = float(det.xmin * frame.shape[1])
-            y1 = float(det.ymin * frame.shape[0])
-            x2 = float(det.xmax * frame.shape[1])
-            y2 = float(det.ymax * frame.shape[0])
+            
+            width = frame.shape[1]
+            height = frame.shape[0]
+            
+            x1 = float(det.xmin * width)
+            y1 = float(det.ymin * height)
+            x2 = float(det.xmax * width)
+            y2 = float(det.ymax * height)
+            
+            center_x = (x1 + x2) / 2.0
+            center_y = (y1 + y2) / 2.0
             conf = float(det.confidence)
-            class_id = float(det.label)
+            class_id = int(det.label)
 
-            bbox_data.extend([x1, y1, x2, y2, conf, class_id])
+            bbox = BoundingBox2D()
+            bbox.center = Pose2D(position=Point2D(x=center_x, y=center_y), theta=0.0)
+            bbox.size_x = x2 - x1
+            bbox.size_y = y2 - y1
 
+            hypothesis = ObjectHypothesis()
+            hypothesis.class_id = str(class_id)
+            hypothesis.score = conf
+
+            detection = Detection2D()
+            detection.header = detection_array.header
+            detection.bbox = bbox
+            detection.results.append(ObjectHypothesisWithPose(hypothesis=hypothesis))
+            detection_array.detections.append(detection)
+            
             cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
-            cv2.putText(frame, f"{label}: {det.confidence:.2f}", (int(x1), int(y1) - 10),
+            cv2.putText(frame, f"{label}: {conf:.2f}", (int(x1), int(y1) - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
             
-        bbox_array.data = bbox_data
         # Publish bounding boxes
-        self.bbox_publisher.publish(bbox_array)
+        self.bbox_publisher.publish(detection_array)
 
         # Annotate and publish
         image_msg = self.bridge.cv2_to_imgmsg(frame, encoding='bgr8')
