@@ -24,6 +24,7 @@ from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import TransformStamped
 from scipy.spatial.transform import Rotation as R
 from vision_msgs.msg import Detection2D, Detection2DArray, BoundingBox3D, BoundingBox3DArray, Detection3D, Detection3DArray
+from src.fusion_node import lidar2pixel
 
 def pointcloud2_to_xyz_array_fast(cloud_msg: PointCloud2, skip_rate: int = 1) -> np.ndarray:
     if cloud_msg.height == 0 or cloud_msg.width == 0:
@@ -45,15 +46,19 @@ def pointcloud2_to_xyz_array_fast(cloud_msg: PointCloud2, skip_rate: int = 1) ->
     ])
 
     raw_data = np.frombuffer(cloud_msg.data, dtype=dtype)
-    points = np.zeros((raw_data.shape[0], 3), dtype=np.float32)
-    points[:,0] = raw_data['x']
-    points[:,1] = raw_data['y']
-    points[:,2] = raw_data['z']
+    
+    points = np.stack((raw_data['x'], raw_data['y'], raw_data['z']), axis=-1)
+
+    nan_mask = np.isnan(points).any(axis=1)
+    num_nans = np.sum(nan_mask)
+    if num_nans > 0:
+        print(f"Skipping {num_nans} NaN point(s) in PointCloud2 message.")
+    points = points[~nan_mask]
 
     if skip_rate > 1:
         points = points[::skip_rate]
 
-    return points
+    return points.astype(np.float32)
 
 class LidarCameraProjectionNode(Node):
     def __init__(self):
@@ -129,51 +134,19 @@ class LidarCameraProjectionNode(Node):
             cv_image = self.bridge.imgmsg_to_cv2(image_msg, desired_encoding='bgr8')
 
         xyz_lidar = pointcloud2_to_xyz_array_fast(lidar_msg, skip_rate=self.skip_rate)
-        n_points = xyz_lidar.shape[0]
-        if n_points == 0:
-            self.get_logger().warn("Empty cloud. Nothing to project.")
-            return
-
-        xyz_lidar_f64 = xyz_lidar.astype(np.float64)
-        ones = np.ones((n_points, 1), dtype=np.float64)
-        xyz_lidar_h = np.hstack((xyz_lidar_f64, ones))
-
-        xyz_cam_h = xyz_lidar_h @ self.T_lidar_to_cam.T
-        xyz_cam = xyz_cam_h[:, :3]
-
-        depth_vals = np.linalg.norm(xyz_lidar, axis=1)
-
-        mask_in_front = (xyz_cam[:, 2] > 0.0)
-        xyz_cam_front = xyz_cam[mask_in_front]
-        depth_front = depth_vals[mask_in_front]
-
-        n_front = xyz_cam_front.shape[0]
-        if n_front == 0:
-            self.get_logger().info("No points in front of camera (z>0).")
-            return
-        
-        rvec = np.zeros((3,1), dtype=np.float64)
-        tvec = np.zeros((3,1), dtype=np.float64)
-        image_points, _ = cv2.projectPoints(
-            xyz_cam_front,
-            rvec, tvec,
-            self.camera_matrix,
-            self.dist_coeffs
-        )
-        image_points = image_points.reshape(-1, 2).astype(np.int64)
+        xs, ys, ps = lidar2pixel(xyz_lidar.T, self.T_lidar_to_cam, self.camera_matrix)
         
         lb = np.array([0, 0])
-        ub = np.array(self.img_size)
+        ub = np.array([self.img_size[1], self.img_size[0]]) # [H, W] to [W, H]
         
-        xs, ys = image_points[:, 0], image_points[:, 1]
-        points = np.stack((ys, xs), axis=1)
+        points = np.stack((xs, ys), axis=1)
         
         filtered_idx = np.all(np.logical_and(lb <= points, points < ub), axis=1)
-        filtered_points = image_points[filtered_idx]
-        filtered_depths = depth_front[filtered_idx]
+        filtered_points = points[filtered_idx]
+        filtered_depths = ps[filtered_idx]
 
         h, w = self.img_size[:2]
-        z_vals = xyz_cam_front[:, 2]
+        z_vals = ps
         z_norm = cv2.normalize(z_vals, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
         z_norm = 255 - z_norm
         
@@ -219,7 +192,7 @@ class LidarCameraProjectionNode(Node):
             
             x1, y1, x2, y2 = max(x1, 0), max(y1, 0), min(x2, w-1), min(y2, h-1)
 
-            if len(depth_vals) > 0:
+            if len(filtered_depths) > 0:
                 object_depth = np.min(depth_lookup[y1:y2, x1:x2])
                 class_name = self.class_names[cls]
                 label = f"{class_name} ({object_depth:.2f}) m"
