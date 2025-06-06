@@ -352,8 +352,8 @@ class LidarCameraProjectionNode(Node):
 
         centroid_array = Float32MultiArray()
         centroid_data = []
-        closest_red = 40.0
-        closest_green = 40.0
+        closest_red = -1
+        closest_green = -1
 
         xydepth = Float32MultiArray()
         xydepth = []        
@@ -390,11 +390,17 @@ class LidarCameraProjectionNode(Node):
                 label = f"{class_name} ({object_depth:.2f}) m"
                 
                 if class_name == 'Green Buoy':
-                    closest_green = min(closest_green, object_depth)
+                    if closest_green == -1:
+                        closest_green = object_depth
+                    else:
+                        closest_green = min(closest_green, object_depth)
                     if closest_green_xydepth[2] < 0 or closest_green_xydepth[2] > object_depth:
                         closest_green_xydepth = [(x1 + x2) / 2.0, (y1 + y2) / 2.0, object_depth]
                 elif class_name == 'Red Buoy':
-                    closest_red = min(closest_red, object_depth)
+                    if closest_red == -1:
+                        closest_red = object_depth
+                    else:
+                        closest_red = min(closest_red, object_depth)
                     if closest_red_xydepth[2] < 0 or closest_green_xydepth[2] > object_depth:
                         closest_red_xydepth = [(x1 + x2) / 2.0, (y1 + y2) / 2.0, object_depth]
                     
