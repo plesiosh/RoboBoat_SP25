@@ -13,7 +13,7 @@ import yaml
 import struct
 import math
 
-from sensor_msgs.msg import Image, PointCloud2
+from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 from message_filters import Subscriber, ApproximateTimeSynchronizer, Cache
 from tf2_ros import TransformBroadcaster
@@ -25,40 +25,24 @@ from geometry_msgs.msg import TransformStamped
 from scipy.spatial.transform import Rotation as R
 from vision_msgs.msg import Detection2D, Detection2DArray, BoundingBox3D, BoundingBox3DArray, Detection3D, Detection3DArray
 from src.fusion_node import lidar2pixel
+from livox_ros_driver2.msg import CustomMsg
 
-def pointcloud2_to_xyz_array_fast(cloud_msg: PointCloud2, skip_rate: int = 1) -> np.ndarray:
-    if cloud_msg.height == 0 or cloud_msg.width == 0:
+def pointcloud2_to_xyz_array_fast(cloud_msg: CustomMsg, skip_rate: int = 1) -> np.ndarray:
+    if cloud_msg.point_num == 0:
         return np.zeros((0, 3), dtype=np.float32)
 
-    field_names = [f.name for f in cloud_msg.fields]
-    if not all(k in field_names for k in ('x','y','z')):
-        return np.zeros((0,3), dtype=np.float32)
+    data = np.array([[p.x, p.y, p.z] for p in cloud_msg.points], dtype=np.float32)
 
-    x_field = next(f for f in cloud_msg.fields if f.name=='x')
-    y_field = next(f for f in cloud_msg.fields if f.name=='y')
-    z_field = next(f for f in cloud_msg.fields if f.name=='z')
+    # Mask out rows with any NaNs
+    nan_mask = np.isnan(data).any(axis=1)
 
-    dtype = np.dtype([
-        ('x', np.float32),
-        ('y', np.float32),
-        ('z', np.float32),
-        ('_', 'V{}'.format(cloud_msg.point_step - 12))
-    ])
+    data = data[~nan_mask]  # remove rows with NaNs
 
-    raw_data = np.frombuffer(cloud_msg.data, dtype=dtype)
-    
-    points = np.stack((raw_data['x'], raw_data['y'], raw_data['z']), axis=-1)
-
-    nan_mask = np.isnan(points).any(axis=1)
-    num_nans = np.sum(nan_mask)
-    if num_nans > 0:
-        print(f"Skipping {num_nans} NaN point(s) in PointCloud2 message.")
-    points = points[~nan_mask]
-
+    # Apply downsampling if needed
     if skip_rate > 1:
-        points = points[::skip_rate]
+        data = data[::skip_rate]
 
-    return points.astype(np.float32)
+    return data
 
 class LidarCameraProjectionNode(Node):
     def __init__(self):
@@ -88,7 +72,7 @@ class LidarCameraProjectionNode(Node):
         image_topic = '/dai_node/annotated_image'
         self.get_logger().info(f"Subscribing to lidar topic: {lidar_topic}")
 
-        self.lidar_sub = Subscriber(self, PointCloud2, lidar_topic)
+        self.lidar_sub = Subscriber(self, CustomMsg, lidar_topic)
         # visualization False turns off camera 
         self.bounding_boxes = []  # will hold latest list of boxes
         self.visualize = config_file['fusion']['visualize']
@@ -125,7 +109,7 @@ class LidarCameraProjectionNode(Node):
     def image_callback(self, msg: Image):
         self.latest_image = msg
 
-    def sync_callback(self, boundingbox_msg: Detection2DArray, lidar_msg: PointCloud2):
+    def sync_callback(self, boundingbox_msg: Detection2DArray, lidar_msg: CustomMsg):
         if self.visualize:
             if self.latest_image is None:
                 self.get_logger().warn("No image available for visualization.")
