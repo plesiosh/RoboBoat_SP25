@@ -1,6 +1,7 @@
 lidar:
   lidar_topic: /livox/lidar
   frame_id: livox_frame
+  msg_type: 1
 
 camera:
   image_topic: /oak/rgb/image_raw
@@ -30,8 +31,8 @@ general:
 
 yolo:
   cuda_path: /workspace/src/perception/YOLOv8_model/buoy_detection.pt
-  dai_blob_path: /workspace/src/perception/YOLOv8_model/best-next_openvino_2022.1_6shave.blob
-  dai_json_path: /workspace/src/perception/YOLOv8_model/best-next.json
+  dai_blob_path: /workspace/src/perception/YOLOv8_model/buoy_detection.blob
+  dai_json_path: /workspace/src/perception/YOLOv8_model/buoy_detection.json
 
 fusion:
   show_lidar_projections: True  # whether or not to draw lidar points on the output image
@@ -42,6 +43,7 @@ fusion:
   record_video: True  # whether record a video or not
   video_file_name: test.avi  # name of the video being recorded
   visualize: False  # whether to visualize the fusion result
+  publish_3d: True
 
 navigation:
   visualize: False

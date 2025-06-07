@@ -21,7 +21,7 @@ from tf2_ros import TransformBroadcaster
 from src.read_yaml import extract_configuration, load_extrinsic_matrix, load_camera_calibration
 from std_msgs.msg import Float32MultiArray
 from visualization_msgs.msg import Marker, MarkerArray
-from geometry_msgs.msg import TransformStamped
+from geometry_msgs.msg import TransformStamped, Point, Vector3, Pose
 from scipy.spatial.transform import Rotation as R
 from vision_msgs.msg import Detection2D, Detection2DArray, BoundingBox3D, BoundingBox3DArray, Detection3D, Detection3DArray
 from src.fusion_node import lidar2pixel
@@ -43,6 +43,30 @@ def pointcloud2_to_xyz_array_fast(cloud_msg: CustomMsg, skip_rate: int = 1) -> n
         data = data[::skip_rate]
 
     return data
+
+def reproject_to_lidar(u, v, depth, K, T_lidar_from_cam):
+    try:
+        fx, fy = K[0, 0], K[1, 1]
+        cx, cy = K[0, 2], K[1, 2]
+        
+        if depth <= 0 or np.isnan(depth):
+            return None
+
+        x_cam = (u - cx) * depth / fx
+        y_cam = (v - cy) * depth / fy
+        z_cam = depth
+
+        point_cam = np.array([x_cam, y_cam, z_cam, 1.0])  # homogeneous
+        if np.any(np.isnan(point_cam)):
+            print("nan encountered")
+
+        point_lidar = T_lidar_from_cam @ point_cam
+        if np.any(np.isnan(point_lidar)):
+            return None
+        return point_lidar[:3]
+    except (ValueError, TypeError, RuntimeWarning):
+        return None
+
 
 class LidarCameraProjectionNode(Node):
     def __init__(self):
@@ -100,11 +124,14 @@ class LidarCameraProjectionNode(Node):
         self.pub_centr = self.create_publisher(Float32MultiArray, '/centroids', 1)
         self.br_tf = TransformBroadcaster(self)
         self.bridge = CvBridge()
-
         self.skip_rate = 1
 
-        
         self.class_names = {11: "Green Buoy", 16: "Red Buoy", 23: "Yellow Buoy"}
+        
+        self.pub_3d = config_file['fusion']['publish_3d']
+        if self.pub_3d:
+            self.pub_bbox3d = self.create_publisher(Detection3DArray, '/bbox3d', 1)
+            
 
     def image_callback(self, msg: Image):
         self.latest_image = msg
@@ -163,6 +190,10 @@ class LidarCameraProjectionNode(Node):
         closest_red_xydepth = [-1.0, -1.0, -1.0]
         closest_green_xydepth = [-1.0, -1.0, -1.0]
 
+        if self.pub_3d:
+            bbox3ds = Detection3DArray(header=boundingbox_msg.header, detections=[])
+            bbox3ds.header.frame_id = "camera_init"
+
         for det in boundingbox_msg.detections:
             x1 = int(det.bbox.center.position.x - det.bbox.size_x / 2)
             x2 = int(det.bbox.center.position.x + det.bbox.size_x / 2)
@@ -181,6 +212,21 @@ class LidarCameraProjectionNode(Node):
                 class_name = self.class_names[cls]
                 label = f"{class_name} ({object_depth:.2f}) m"
                 
+                if self.pub_3d:
+                    object_cam_pose = np.array([det.bbox.center.position.x, det.bbox.center.position.y, object_depth + 0.1])
+                    object_lid_pose = reproject_to_lidar(object_cam_pose[0], object_cam_pose[1], object_cam_pose[2], self.camera_matrix, self.T_lidar_to_cam)
+                    
+                    if object_lid_pose is None:
+                        continue
+                    
+                    # xyz -> yzx
+                    object_pose = Pose(position=Point(x=object_lid_pose[1], y=object_lid_pose[2], z=object_lid_pose[0]))
+                    object_size = Vector3(x=0.2, y=0.2, z=0.2)
+
+                    bbox3d = BoundingBox3D(center=object_pose, size=object_size)
+                    det3d = Detection3D(results=det.results, bbox=bbox3d)
+                    bbox3ds.detections.append(det3d)
+
                 if class_name == 'Green Buoy':
                     if closest_green == -1:
                         closest_green = object_depth
@@ -200,8 +246,6 @@ class LidarCameraProjectionNode(Node):
                 label = "N/A"
         
         centroid_data.extend([closest_red, closest_green])
-        # centroid_array.data = centroid_data
-
 
         # x, y, depth for closest bouys
         xydepth.extend(closest_red_xydepth)
@@ -214,6 +258,8 @@ class LidarCameraProjectionNode(Node):
             out_msg.header = image_msg.header
             self.pub_image.publish(out_msg)
 
+        if self.pub_3d:
+            self.pub_bbox3d.publish(bbox3ds)            
 
 
 def main(args=None):
