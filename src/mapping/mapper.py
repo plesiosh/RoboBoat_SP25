@@ -13,10 +13,12 @@ from filterpy.kalman import KalmanFilter
 sys.path.insert(1, '../perception/')
 from src.read_yaml import extract_configuration
 import math
+import argparse
 
 class LandmarkMapper(Node):
-    def __init__(self):
+    def __init__(self, simulate=False):
         super().__init__('landmark_mapper')
+        self.simulate = simulate
 
         config_file = extract_configuration()
         if config_file is None:
@@ -123,7 +125,7 @@ class LandmarkMapper(Node):
                     pred = kf.x[:2]
                     # Only match if y is close (aligned along x-axis)
                     # if np.linalg.norm(pred - global_pos) < 1.0:
-                    if abs(pred[0] - global_pos[0]) < 1 or (abs(pred[0] - global_pos[0]) < X_THRESHOLD and abs(pred[1] - global_pos[1]) < Y_THRESHOLD):
+                    if abs(pred[0] - global_pos[0]) < 0.8 or (abs(pred[0] - global_pos[0]) < X_THRESHOLD and abs(pred[1] - global_pos[1]) < Y_THRESHOLD):
                         kf.predict()
                         kf.update(global_pos)
                         matched = True
@@ -133,7 +135,7 @@ class LandmarkMapper(Node):
                     self.map[class_id].append(self.initialize_kalman_filter(global_pos))
 
         self.publish_markers()
-        self.evaluate_map_error()
+        # self.evaluate_map_error()
 
 
     def initialize_kalman_filter(self, initial_pos):
@@ -217,14 +219,23 @@ class LandmarkMapper(Node):
         self.marker_pub.publish(marker_array)
 
     def publish_and_save_map(self):
-        simple_map = {cid: [kf.x[:2].tolist() for kf in kfs] for cid, kfs in self.map.items()}
+        if self.simulate:
+            simple_map = self.gt_map
+            self.get_logger().info("Simulate=True: publishing GT map")
+        else:
+            simple_map = {cid: [kf.x[:2].tolist() for kf in kfs] for cid, kfs in self.map.items()}
+            self.get_logger().info("Publishing estimated map")
+
         self.map_pub.publish(String(data=str(simple_map)))
         np.save('/tmp/landmark_map.npy', simple_map)
-        self.get_logger().info("Published and saved landmark map")
 
 def main(args=None):
     rclpy.init(args=args)
-    node = LandmarkMapper()
+    parser = argparse.ArgumentParser(description="Landmark Mapper Node")
+    parser.add_argument('--simulate', action='store_true', help="Use ground truth map instead of detections")
+    parsed_args, _ = parser.parse_known_args()
+
+    node = LandmarkMapper(simulate=parsed_args.simulate)
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
