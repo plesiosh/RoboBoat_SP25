@@ -155,8 +155,8 @@ Start training with `python3 train.py`. This can take several hours, even on a p
 
 ### 4. Convert the model to `.blob` format
 
-Go to Luxonis's DepthAI Tools website: [https://tools.luxonis.com/](https://tools.luxonis.com/)
+Go to Luxonis's DepthAI Tools website: [https://tools.luxonis.com/](https://tools.luxonis.com/).
 
-Upload your `.pt` model, and enter the input image shape (width, height) with a space in between (for example: `768 480`)
+Upload your `.pt` model, and enter the input image shape (width, height) with a space in between (for example: `768 480`).
 
 Click submit and wait for the conversion to complete. A `.zip` file containing `.bin`, `.blob`, `.json`, `.onnx`, and `.xml` files for the model will be downloaded to your computer.
