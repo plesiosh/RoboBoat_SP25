@@ -152,3 +152,11 @@ model = YOLO("yolov8n.pt") # this file doesn't need to be on your system
 Finally, in `model.train()`, change the parameter `resume=True` to `resume=False`. This will start from a general YOLOv8 model rather than trying to use pre-existing weights that don't currently exist on your system.
 
 Start training with `python3 train.py`. This can take several hours, even on a powerful PC. Results will be saved at a location that looks similar to `./runs/detect/v13/weights/best.pt`.
+
+### 4. Convert the model to `.blob` format
+
+Go to Luxonis's DepthAI Tools website: [https://tools.luxonis.com/](https://tools.luxonis.com/)
+
+Upload your `.pt` model, and enter the input image shape (width, height) with a space in between (for example: `768 480`)
+
+Click submit and wait for the conversion to complete. A `.zip` file containing `.bin`, `.blob`, `.json`, `.onnx`, and `.xml` files for the model will be downloaded to your computer.
